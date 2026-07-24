@@ -1,0 +1,1838 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Nonna – Zutaten rein, Rezept raus.</title>
+<!-- ============ ANALYTICS (Google Analytics 4) ============
+     Measurement-ID G-M61V08K4B4 ist aktiv. Sobald die Seite live auf GitHub Pages/Vercel läuft, sammelt GA
+     automatisch Sitzungen, Geräte, Herkunft etc., zusätzlich zu den App-eigenen Events (siehe track() im Skript
+     weiter unten: Zugangscode, Anmeldung, Rezept-Generierung, Favoriten, Meal-Prep, Kochschule, Pro-Kauf).
+     Lokal per file:// oder mit Adblocker bleibt das Skript wirkungslos, die App funktioniert aber trotzdem
+     normal weiter. Kein Supabase o.ä. nötig. -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-M61V08K4B4"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){ dataLayer.push(arguments); }
+  gtag('js', new Date());
+  gtag('config', 'G-M61V08K4B4');
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,700;1,600&family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Farbe */
+  --bg-top:#F7FAFD; --bg-bottom:#EDF3F8;
+  --surface:#FFFFFF;
+  --blue-050:#F0F5FA; --blue-100:#E3EDF5; --blue-200:#CCDEEC; --blue-300:#A6C6DC;
+  --blue-500:#5E92B5; --blue-700:#2F5B7C; --blue-900:#1C384D;
+  --ink:#243038; --muted:#687884; --line:#DFE8F0;
+  --warm:#E3A85C; --warm-soft:#F7EBD8;
+  --good:#4E9B6F; --bad:#C4573B;
+  /* Raster: 4px-Basis */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:28px; --s7:40px;
+  --pad:20px;
+  --radius:18px; --radius-s:13px;
+  --serif:'Fraunces',Georgia,serif;
+  --display:'Archivo',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+  --shadow:0 8px 24px rgba(28,56,77,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#E9F0F6;font-family:var(--body);color:var(--ink);-webkit-font-smoothing:antialiased}
+#frame{max-width:760px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;position:relative;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(94,146,181,.13) 1px, transparent 0) 0 0/22px 22px,
+    linear-gradient(180deg,var(--bg-top),var(--bg-bottom));
+  box-shadow:0 0 60px rgba(28,56,77,.10)}
+/* Header */
+header{display:flex;align-items:center;justify-content:space-between;padding:var(--s5) var(--pad) var(--s3)}
+.wordmark{font-family:var(--serif);font-weight:700;font-style:italic;font-size:28px;letter-spacing:-.01em;color:var(--blue-900);display:flex;align-items:center;gap:10px}
+.wordmark svg{display:block}
+.chip-btn{border:0;cursor:pointer;font-family:var(--body);font-weight:600;font-size:13px;padding:8px 14px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--blue-700)}
+.chip-btn.pro-on{background:var(--warm-soft);border-color:#EBD9BC;color:#966A22}
+/* Main + Raster */
+main{flex:1;overflow-y:auto;padding:0 var(--pad) 120px}
+h1.screen{font-family:var(--display);font-weight:800;font-size:34px;line-height:1.05;letter-spacing:-.03em;color:var(--blue-900);margin:var(--s4) 0 var(--s2)}
+.sub{color:var(--muted);font-size:15px;line-height:1.5;margin:0 0 var(--s6)}
+.sec-label{font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--blue-500);margin:var(--s6) 0 var(--s3)}
+.back{border:0;background:none;cursor:pointer;font-family:var(--body);font-weight:600;font-size:14px;color:var(--blue-700);padding:0;margin:var(--s4) 0 0;display:inline-flex;align-items:center;gap:6px;height:28px}
+.nonna-says{display:flex;gap:10px;align-items:flex-start;margin:0 0 var(--s5)}
+.nonna-says .bubble{background:var(--surface);border:1px solid var(--line);border-radius:4px 16px 16px 16px;padding:10px 14px;font-size:14px;line-height:1.45}
+.nonna-face{flex:0 0 34px;width:34px;height:34px;border-radius:50%;background:var(--blue-100);display:flex;align-items:center;justify-content:center;font-size:17px}
+/* Cards & Buttons */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:var(--s4) var(--s5);box-shadow:var(--shadow);margin-bottom:var(--s3)}
+.btn{display:block;width:100%;border:0;cursor:pointer;font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:-.01em;padding:var(--s4);border-radius:16px;background:var(--blue-700);color:#fff;transition:transform .08s ease}
+.btn:active{transform:scale(.98)}
+.btn:disabled{background:var(--blue-200);color:#fff;cursor:not-allowed}
+.btn.ghost{background:var(--surface);color:var(--blue-700);border:1.5px solid var(--blue-200)}
+.btn.warm{background:var(--warm);color:#4A3312}
+.btn:focus-visible,.chip-btn:focus-visible,.opt:focus-visible{outline:3px solid var(--blue-500);outline-offset:2px}
+.row{display:flex;gap:var(--s3)}
+.row .btn{flex:1}
+.stack>*+*{margin-top:var(--s3)}
+/* Inputs */
+.field{width:100%;border:1.5px solid var(--line);background:var(--surface);border-radius:16px;padding:var(--s4);font-family:var(--body);font-size:16px;color:var(--ink);resize:none}
+.field:focus{outline:none;border-color:var(--blue-500)}
+input.field{height:52px}
+.chips{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s2) 0 0}
+.chips:empty{display:none}
+.chip{display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--blue-200);color:var(--blue-900);font-size:14px;font-weight:500;padding:7px 8px 7px 13px;border-radius:999px}
+.chip button{border:0;background:var(--blue-100);color:var(--blue-900);width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center}
+/* Fragen-Flow */
+.q-wrap{padding-top:var(--s5);max-width:520px}
+.q-eyebrow{font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue-500);margin-bottom:var(--s3)}
+.q-title{font-family:var(--display);font-weight:800;font-size:30px;line-height:1.08;letter-spacing:-.03em;color:var(--blue-900);margin-bottom:var(--s6)}
+.opts{display:flex;flex-direction:column;gap:var(--s3)}
+.opt{text-align:left;cursor:pointer;border:1.5px solid var(--line);background:var(--surface);border-radius:16px;padding:var(--s4);font-family:var(--body);transition:border-color .12s,background .12s}
+.opt:hover{border-color:var(--blue-300)}
+.opt.sel{border-color:var(--blue-700);background:var(--blue-050)}
+.opt .t{font-weight:600;font-size:15.5px}
+.opt .s{font-size:13px;color:var(--muted);margin-top:2px}
+.q-progress{display:flex;gap:6px;margin-bottom:var(--s5)}
+.q-progress i{height:4px;flex:1;border-radius:2px;background:var(--blue-200)}
+.q-progress i.on{background:var(--blue-700)}
+/* Loader */
+.loader{min-height:calc(100dvh - 240px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:var(--s5)}
+.pot{width:120px;height:120px}
+.steam{stroke:var(--blue-500);stroke-width:5;stroke-linecap:round;fill:none;opacity:0;animation:steam 2.2s infinite ease-out}
+.steam.s2{animation-delay:.5s}.steam.s3{animation-delay:1s}
+@keyframes steam{0%{opacity:0;transform:translateY(8px)}30%{opacity:.8}100%{opacity:0;transform:translateY(-16px)}}
+.spoon{transform-origin:60px 78px;animation:stir 1.6s infinite ease-in-out}
+@keyframes stir{0%,100%{transform:rotate(-14deg)}50%{transform:rotate(14deg)}}
+@media (prefers-reduced-motion:reduce){.steam,.spoon{animation:none}.steam{opacity:.5}}
+.loader .phrase{font-family:var(--display);font-weight:700;font-size:18px;color:var(--blue-900);min-height:26px}
+.loader .small{font-size:13px;color:var(--muted)}
+/* Konzept-Karten */
+.concept-grid{display:flex;flex-direction:column;gap:var(--s3)}
+.concept{margin-bottom:0;cursor:pointer}
+.concept .k-num{font-family:var(--display);font-weight:800;font-size:13px;color:var(--blue-500);letter-spacing:.1em}
+.concept h3{font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:-.02em;color:var(--blue-900);margin:var(--s1) 0 var(--s2)}
+.concept p{font-size:14px;line-height:1.5;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.concept .taste{font-size:13px;color:var(--muted);margin-top:var(--s2);line-height:1.45;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden}
+.meta{display:flex;gap:var(--s2);margin-top:var(--s3)}
+.tag{font-size:12px;font-weight:600;background:var(--blue-050);color:var(--blue-700);padding:5px 10px;border-radius:999px}
+.tag.w{background:var(--warm-soft);color:#966A22}
+/* Rezept */
+.r-head{display:flex;justify-content:space-between;align-items:flex-end;gap:var(--s5)}
+.r-head h1{flex:1 1 auto;min-width:0}
+.heart{border:1.5px solid var(--line);background:var(--surface);width:46px;height:46px;flex:0 0 46px;border-radius:14px;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;color:var(--blue-300)}
+.heart.on{color:var(--bad);border-color:#EED4CB;background:#FBF1ED}
+.header-actions{display:flex;align-items:center;gap:8px}
+.heart-badge{border:1.5px solid var(--line);background:var(--surface);width:38px;height:38px;border-radius:12px;cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;color:var(--blue-300)}
+.heart-badge.on{color:var(--bad);border-color:#EED4CB;background:#FBF1ED}
+.zutat{display:flex;justify-content:space-between;gap:var(--s4);padding:9px 0;border-bottom:1px dashed var(--line);font-size:14.5px}
+.zutat:last-child{border-bottom:0}
+.zutat .m{color:var(--blue-700);font-weight:600;white-space:nowrap}
+.step{display:flex;gap:var(--s4);margin-bottom:var(--s4)}
+.step .n{flex:0 0 30px;height:30px;border-radius:50%;background:var(--blue-700);color:#fff;font-family:var(--display);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
+.step p{font-size:14.5px;line-height:1.55;padding-top:4px}
+/* Tabbar */
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:760px;background:rgba(247,250,253,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;padding:var(--s2) var(--s2) calc(10px + env(safe-area-inset-bottom))}
+nav button{flex:1;border:0;background:none;cursor:pointer;font-family:var(--body);font-size:11px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:12px}
+nav button.on{color:var(--blue-700)}
+nav button .ic{font-size:20px;line-height:1}
+nav button .lock-mini{font-size:9px;color:var(--warm)}
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(28,56,77,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+.sheet{background:var(--bg-top);width:100%;max-width:760px;border-radius:26px 26px 0 0;padding:var(--s6) var(--pad) calc(var(--s6) + env(safe-area-inset-bottom));max-height:88dvh;overflow-y:auto}
+.sheet h2{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:-.03em;color:var(--blue-900);margin-bottom:var(--s2)}
+.benefit{display:flex;gap:var(--s3);align-items:flex-start;margin:var(--s4) 0}
+.benefit .ic{flex:0 0 34px;height:34px;border-radius:11px;background:var(--blue-050);display:flex;align-items:center;justify-content:center;font-size:16px}
+.benefit b{font-size:15px}
+.benefit p{font-size:13px;color:var(--muted);line-height:1.4}
+.price{font-family:var(--display);font-weight:800;font-size:22px;color:var(--blue-900);text-align:center;margin:var(--s4) 0 var(--s1)}
+.price small{font-size:13px;color:var(--muted);font-weight:500;font-family:var(--body)}
+/* Zugangscode */
+.gate-overlay{position:fixed;inset:0;z-index:9999;background:linear-gradient(180deg,var(--bg-top),var(--bg-bottom));display:flex;align-items:center;justify-content:center;padding:var(--pad)}
+.gate-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:var(--s6) var(--s5)}
+.gate-card h2{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--blue-900);margin-bottom:var(--s1)}
+/* Lock */
+.locked{position:relative;overflow:hidden;border-radius:var(--radius)}
+.lock-cover{position:absolute;inset:0;background:linear-gradient(180deg,rgba(247,250,253,.3),rgba(247,250,253,.97) 70%);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:var(--s5);text-align:center;gap:var(--s3)}
+.lock-cover .badge{background:var(--warm-soft);color:#966A22;font-weight:700;font-size:12px;padding:6px 12px;border-radius:999px}
+/* Meal-Prep */
+.seg{display:flex;background:var(--blue-100);border-radius:14px;padding:4px;gap:4px;margin:0 0 var(--s4)}
+.seg button{flex:1;border:0;cursor:pointer;padding:10px;border-radius:11px;background:transparent;font-family:var(--body);font-weight:600;font-size:14px;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--blue-900);box-shadow:0 2px 8px rgba(28,56,77,.1)}
+.preset-row{display:flex;gap:var(--s2);margin-top:var(--s2)}
+.preset-row .chip-btn{padding:7px 12px}
+.day-grid{display:flex;flex-direction:column;gap:var(--s3)}
+.day-card{margin-bottom:0}
+.day-card h3{font-family:var(--display);font-weight:800;font-size:16px;color:var(--blue-900);margin-bottom:var(--s3)}
+.meal{display:flex;gap:var(--s3);align-items:flex-start;padding:var(--s3);border:1px solid var(--line);border-radius:14px;margin-bottom:var(--s2);cursor:pointer;background:var(--surface)}
+.meal:last-child{margin-bottom:0}
+.meal .slot{flex:0 0 66px;font-size:11px;font-weight:700;color:var(--blue-500);text-transform:uppercase;letter-spacing:.08em;padding-top:2px}
+.meal b{font-size:14.5px;display:block}
+.meal p{font-size:12.5px;color:var(--muted);line-height:1.4;margin-top:2px}
+.meal .del{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px;padding:2px;margin-left:auto}
+.prep-box{background:var(--blue-050);border:1px solid var(--blue-100);border-radius:16px;padding:var(--s4) var(--s5);margin-bottom:var(--s5)}
+.prep-box li{font-size:14px;line-height:1.55;margin-left:18px}
+/* Kalender-Ansicht: echter Monatsraster */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3)}
+.cal-nav b{font-family:var(--display);font-weight:800;font-size:15px;color:var(--blue-900);text-transform:capitalize}
+.cal-arrow{border:1px solid var(--line);background:var(--surface);width:34px;height:34px;border-radius:10px;cursor:pointer;font-size:15px;color:var(--blue-700)}
+.cal-weekdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-bottom:6px;width:100%}
+.cal-weekdays span{text-align:center;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;overflow:hidden}
+.cal-month{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-bottom:var(--s4);width:100%;overflow:hidden}
+.mcell{aspect-ratio:1;min-width:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;gap:2px;overflow:hidden}
+.mcell.empty{border:0;background:transparent;cursor:default}
+.mcell .dnum{font-size:13px;font-weight:600;color:var(--ink);line-height:1}
+.mcell.today .dnum{color:var(--blue-700);font-weight:800}
+.mcell.today{border-color:var(--blue-500)}
+.mcell.has{background:var(--blue-050)}
+.mcell.sel{background:var(--blue-700);border-color:var(--blue-700)}
+.mcell.sel .dnum{color:#fff}
+.mcell .ddots{font-size:6px;color:var(--warm);letter-spacing:0;white-space:nowrap}
+.mcell.sel .ddots{color:#fff}
+/* Kochschule */
+.path{position:relative;padding:var(--s2) 0 var(--s5)}
+.node{display:flex;gap:var(--s4);align-items:center;margin-bottom:var(--s2);position:relative}
+.node .dot{flex:0 0 54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;background:var(--surface);border:2px solid var(--line);z-index:1}
+.node.done .dot{background:var(--good);border-color:var(--good);color:#fff}
+.node.next .dot{background:var(--blue-700);border-color:var(--blue-700);color:#fff;box-shadow:0 0 0 6px var(--blue-100)}
+.node.lock .dot{color:var(--blue-300)}
+.node .info b{font-family:var(--display);font-size:15.5px;letter-spacing:-.01em;display:block}
+.node .info span{font-size:12.5px;color:var(--muted)}
+.node.lock .info b{color:var(--muted)}
+.node:not(:last-child)::before{content:"";position:absolute;left:26px;top:54px;width:2px;height:14px;background:var(--line)}
+.node.tappable{cursor:pointer}
+.progress-head{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:var(--s4);margin-bottom:var(--s5)}
+.progress-head b{font-family:var(--display);font-size:15px}
+.pbar{height:8px;background:var(--blue-100);border-radius:4px;margin-top:var(--s2);overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--blue-700);border-radius:4px}
+/* Quiz */
+.quiz-opt{margin-bottom:0}
+.quiz-opt.right{border-color:var(--good);background:#EFF7F2}
+.quiz-opt.wrong{border-color:var(--bad);background:#FBF1ED}
+.feedback{font-size:14px;font-weight:600;margin:var(--s3) 0 var(--s4)}
+.feedback.ok{color:var(--good)}.feedback.no{color:var(--bad)}
+/* Sonstiges */
+.err-box{text-align:center;padding:var(--s7) var(--s3);margin-top:var(--s5)}
+.err-box .e{font-size:34px;margin-bottom:var(--s3)}
+.empty{text-align:center;padding:56px var(--s4);color:var(--muted)}
+.empty .e{font-size:40px;margin-bottom:var(--s4)}
+.empty b{display:block;font-family:var(--display);font-size:18px;color:var(--ink);margin-bottom:var(--s2)}
+.usage-note{font-size:13px;color:var(--muted);text-align:center;margin-top:var(--s3)}
+.toggle{display:flex;justify-content:space-between;align-items:center;padding:var(--s4) 0;border-bottom:1px solid var(--line)}
+.sw{width:50px;height:30px;border-radius:15px;background:var(--blue-200);border:0;cursor:pointer;position:relative;transition:background .15s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .15s}
+.sw.on{background:var(--good)}.sw.on::after{left:23px}
+.summary-line{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.summary-line:last-child{border-bottom:0}
+.summary-line span{color:var(--muted)}
+.summary-line b{text-align:right;max-width:60%}
+/* Responsiv */
+@media(min-width:640px){
+  :root{--pad:40px}
+  h1.screen{font-size:40px}
+}
+</style>
+</head>
+<body>
+<div id="gate" class="gate-overlay">
+  <div class="gate-card">
+    <div class="wordmark" style="justify-content:center;margin-bottom:var(--s3)">
+      <svg width="26" height="26" viewBox="0 0 26 26"><path d="M4 15h18l-2 6a3 3 0 0 1-2.8 2H8.8A3 3 0 0 1 6 21l-2-6z" fill="#2F5B7C"/><path d="M8 11c0-2 1.5-2.5 1.5-4M13 11c0-2 1.5-2.5 1.5-4M18 11c0-2 1.5-2.5 1.5-4" stroke="#5E92B5" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>
+      Nonna
+    </div>
+    <h2 style="text-align:center">Nur für Familie und Freunde.</h2>
+    <p class="sub" style="text-align:center;margin-bottom:var(--s4)">Nonna testet noch in der Küche – sag ihr den Code, den du von mir bekommen hast.</p>
+    <div class="stack">
+      <input class="field" id="gateCodeInput" type="password" placeholder="Zugangscode" autocomplete="off" onkeydown="if(event.key==='Enter')submitGateCode()">
+      <button class="btn" onclick="submitGateCode()">Rein in die Küche</button>
+    </div>
+    <p class="usage-note" id="gateErr" style="color:var(--bad);text-align:center"></p>
+  </div>
+</div>
+<div id="frame">
+  <header>
+    <div class="wordmark">
+      <svg width="26" height="26" viewBox="0 0 26 26"><path d="M4 15h18l-2 6a3 3 0 0 1-2.8 2H8.8A3 3 0 0 1 6 21l-2-6z" fill="#2F5B7C"/><path d="M8 11c0-2 1.5-2.5 1.5-4M13 11c0-2 1.5-2.5 1.5-4M18 11c0-2 1.5-2.5 1.5-4" stroke="#5E92B5" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>
+      Nonna
+    </div>
+    <div class="header-actions">
+      <button class="heart-badge" id="headerHeart" onclick="toggleFav()" aria-label="Favorit" style="display:none">♡</button>
+      <button class="chip-btn" id="proBadge" onclick="openProfile()">…</button>
+    </div>
+  </header>
+  <main id="app"></main>
+  <nav id="tabbar"></nav>
+  <div id="modal"></div>
+</div>
+
+<script>
+/* ============ STATE ============ */
+const S = {
+  tab:'cook', pro:false, usage:[], favs:[], answers:null, mealplan:null, account:null, apiKey:null,
+  school:{completed:[],cache:{}},
+  gen:{step:'input', ingredients:[], qIndex:0, draft:{}, concepts:[], detail:null, wish:'', prevTitles:[], retry:null},
+  mp:{step:'idle', ingredients:'', days:5, meals:2, view:'plan', detail:null, startDate:null, calMonth:null},
+  sc:{view:'path', level:'mittel', lessonIdx:null, lesson:null, phase:'intro', quizIdx:0, quizAnswered:null, correct:0, showShopping:false},
+  fav:{view:'list', open:null},
+  loadTimer:null, lastErr:null
+};
+const FREE_LIMIT = 2;
+const WEEK = 7*24*60*60*1000;
+
+/* ============ ANALYTICS ============ */
+/* Schickt Events an Google Analytics (gtag.js, siehe <head>), sofern geladen.
+   Läuft ins Leere (kein Fehler), wenn gtag nicht verfügbar ist – z.B. lokal via file://
+   oder wenn ein Adblocker das GA-Skript blockiert. */
+function track(name, params){
+  try{
+    if(typeof gtag === 'function') gtag('event', name, params||{});
+  }catch(e){}
+}
+
+/* ============ ZUGANGSCODE (Freunde & Familie – reiner Client-Schutz, kein echter Login) ============ */
+const GATE_CODE = 'schmeckt-gut';
+function gateUnlocked(){
+  try{ return localStorage.getItem('nonna:gate')==='1'; }catch(e){ return false; }
+}
+function hideGate(){ const g=document.getElementById('gate'); if(g) g.style.display='none'; }
+function submitGateCode(){
+  const input = document.getElementById('gateCodeInput');
+  const val = (input?.value||'').trim().toLowerCase();
+  if(val === GATE_CODE){
+    try{ localStorage.setItem('nonna:gate','1'); }catch(e){}
+    hideGate();
+    track('gate_unlock');
+  }else{
+    const e = document.getElementById('gateErr');
+    if(e) e.textContent = 'Das war\'s leider nicht – frag Nonna nach dem Code.';
+    if(input){ input.value=''; input.focus(); }
+  }
+}
+if(gateUnlocked()) hideGate();
+
+/* ============ EXAKTER FRAGEN-WORTLAUT ============ */
+const QUESTIONS = [
+ {key:'skill', q:'Welches handwerkliche Geschick bringst du mit?', opts:[
+   {t:'Gerade Ausgezogen', s:'Einfach'},
+   {t:'Ich rocke die WG-Küche', s:'Mittel'},
+   {t:'Alles was Mama mir beigebracht hat', s:'Gut'},
+   {t:'Tim Raue wäre Stolz auf mich', s:''}]},
+ {key:'kueche', q:'Welche Küche möchtest du kochen?', opts:[
+   {t:'Lass den Suppentopf kochen', s:''},
+   {t:'Gib mir Ein-Topf', s:''},
+   {t:'Alles für den Grill', s:''},
+   {t:'Alla Nonna (Wie bei Mama)', s:''},
+   {t:'Fine Dining', s:''}]},
+ {key:'ausstattung', q:'Wie gut ist deine Küche ausgestattet?', opts:[
+   {t:'Das nötigste ist da', s:''},
+   {t:'Die Mitteleuropäische Standardküche', s:''},
+   {t:'Das wichtigste für Asien und Europa', s:''},
+   {t:'Alles, was es braucht', s:''}]},
+ {key:'zeit', q:'Wie viel Zeit bringst du mit?', opts:[
+   {t:'Zack, Zack, wir haben doch keine Zeit!', s:'ca. 20 Minuten'},
+   {t:'Ich muss gleich wieder zur Arbeit', s:'ca. 30 Minuten'},
+   {t:'Ne Stunde bring ich schon mit.', s:'ca. 60 Minuten'},
+   {t:'Wir haben alle Zeit der Welt', s:'kein Zeitlimit'}]},
+ {key:'personen', q:'Für wie viele Personen kochst du?', opts:[
+   {t:'Ich habe doch keine Freunde', s:'1 Person'},
+   {t:'Muss ich wirklich teilen?', s:'2 Personen'},
+   {t:'Alle guten Dinge sind 3', s:'3 Personen'},
+   {t:'4 auf einen Streich', s:'4 Personen'},
+   {t:'Ab wann beginnt eigentlich eine Großfamilie?', s:'5 Personen'}]}
+];
+const Q_SHORT = {skill:'Geschick', kueche:'Küche', ausstattung:'Ausstattung', zeit:'Zeit', personen:'Personen'};
+
+const LESSONS = [
+ {icon:'🔪', t:'Messer & Schnitttechniken', d:'Julienne, Brunoise – Abschluss: knackiger Gemüsesalat'},
+ {icon:'🍚', t:'Reis richtig kochen', d:'Abschluss: perfekter Jasminreis mit Topping'},
+ {icon:'⚖️', t:'Die Balance', d:'Süß, sauer, salzig, scharf, umami – Abschluss: Dressing & Dip'},
+ {icon:'🔥', t:'Wok-Basics & Hitze', d:'Abschluss: Gemüse-Stir-Fry'},
+ {icon:'🧄', t:'Marinieren & Würzen', d:'Abschluss: mariniertes Protein nach Wahl'},
+ {icon:'🍜', t:'Brühen & Suppen', d:'Abschluss: schnelle Nudelsuppe'},
+ {icon:'♨️', t:'Dämpfen', d:'Abschluss: gedämpftes Gericht'},
+ {icon:'🏆', t:'Abschlussprüfung', d:'Ein komplettes Menü aus allem Gelernten'}
+];
+
+/* Festes Curriculum (kein API-Call, immer identisch – bewusster Klickdummy).
+   Drei Schwierigkeitsstufen pro Lektion: gleiche Zutaten, gleiches Gericht,
+   aber unterschiedliche Technik-Tiefe, Quizfragen und Ansprache – so bleibt
+   EINE Einkaufsliste pro Lektion gültig, egal welche Stufe gewählt wird. */
+const LESSON_CONTENT = {
+anfaenger: [
+{ /* 1. Messer & Schnitttechniken */
+  intro:'Keine Sorge, Schatz – wir fangen ganz in Ruhe an. Ein scharfes Messer und ein bisschen Geduld reichen, um Gemüse in schöne, gleichmäßige Streifen zu verwandeln.',
+  lernziele:['Karotte und Gurke in längliche Streifen schneiden','Die Finger beim Schneiden sicher einkrallen','Dir Zeit lassen – Übung kommt von ganz allein'],
+  quiz:[
+    {frage:'Wie nennt man feine, lange Gemüsestreifen?', optionen:['Julienne','Würfel','Scheiben'], richtig:0},
+    {frage:'Warum hältst du das Gemüse mit eingekrallten Fingern?', optionen:['Sieht schöner aus','Damit du dich nicht schneidest','Ist schneller'], richtig:1},
+    {frage:'Was ist wichtiger als Tempo, mein Schatz?', optionen:['Lautstärke','Gleichmäßigkeit und Sicherheit','Die Messergröße'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Knackiger Julienne-Gemüsesalat', konzept:'Rohes Gemüse, in Ruhe geschnitten, mit einem einfachen süß-sauren Dressing.',
+    zutaten:[{menge:'1',einheit:'',name:'Karotte'},{menge:'1/2',einheit:'',name:'Gurke'},{menge:'2',einheit:'',name:'Frühlingszwiebeln'},{menge:'1',einheit:'EL',name:'Sesam'},{menge:'2',einheit:'EL',name:'Reisessig'},{menge:'1',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'TL',name:'Honig'}],
+    schritte:['Karotte und Gurke in Streifen schneiden – sie müssen nicht perfekt gleich sein.','Frühlingszwiebeln in Ringe schneiden.','Reisessig, Sojasauce und Honig in einer Schüssel verrühren.','Gemüse dazugeben und locker vermischen.','Sesam darüberstreuen, fertig ist dein erstes Werk.'],
+    anrichten:'Einfach in eine Schale geben – hier zählt der Geschmack, nicht die Perfektion.',
+    geschmacksprofil:'Frisch, knackig, angenehm süß-sauer – ein sanfter Einstieg.'
+  }
+},
+{ /* 2. Reis richtig kochen */
+  intro:'Reis kochen klingt banal, ist aber die Basis für alles, was noch kommt, Schatz. Lass uns das einmal in Ruhe richtig lernen.',
+  lernziele:['Reis so lange waschen, bis das Wasser klar ist','Das Verhältnis von Reis zu Wasser einhalten','Geduldig zugedeckt ruhen lassen'],
+  quiz:[
+    {frage:'Warum wäschst du den Reis vor dem Kochen?', optionen:['Damit er klebriger wird','Um überschüssige Stärke abzuspülen','Ist nicht nötig'], richtig:1},
+    {frage:'Was passiert, wenn du den Deckel während des Ruhens abnimmst?', optionen:['Nichts Schlimmes','Der Dampf entweicht, Reis wird ungleichmäßig','Reis wird schneller fertig'], richtig:1},
+    {frage:'Wie lange köchelt der Reis zugedeckt?', optionen:['2 Minuten','Etwa 12 Minuten','1 Stunde'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Perfekter Jasminreis mit geröstetem Sesam', konzept:'Dein erster wirklich guter Reis, Schritt für Schritt.',
+    zutaten:[{menge:'300',einheit:'g',name:'Jasminreis'},{menge:'450',einheit:'ml',name:'Wasser'},{menge:'1',einheit:'EL',name:'Sesam'},{menge:'1',einheit:'TL',name:'Sesamöl'}],
+    schritte:['Reis in einem Sieb waschen, bis das Wasser klar abläuft.','Reis und Wasser in einen Topf geben, aufkochen.','Hitze klein stellen, Deckel drauf, 12 Minuten köcheln – nicht öffnen!','Vom Herd nehmen und 10 Minuten zugedeckt ruhen lassen.','Sesam kurz in einer Pfanne rösten, mit Sesamöl über den Reis geben.'],
+    anrichten:'Locker mit einer Gabel auflockern und in eine Schale geben.',
+    geschmacksprofil:'Mild, duftend, mit einer nussigen Note vom Sesam.'
+  }
+},
+{ /* 3. Die Balance */
+  intro:'Süß, sauer, salzig, scharf, umami – klingt kompliziert, ist es aber nicht. Wir probieren uns einfach gemeinsam durch, Schatz.',
+  lernziele:['Die fünf Geschmacksrichtungen einmal bewusst schmecken','Zutat für Zutat dazugeben, nicht alles auf einmal','Mutig probieren und nachjustieren'],
+  quiz:[
+    {frage:'Was gleicht zu viel Schärfe am besten aus?', optionen:['Etwas Süße','Noch mehr Chili','Mehr Salz'], richtig:0},
+    {frage:'Was bedeutet "Umami" ungefähr?', optionen:['Eine Frucht','Herzhafte Tiefe im Geschmack','Nur eine andere Bezeichnung für salzig'], richtig:1},
+    {frage:'Wie gehst du am besten beim Abschmecken vor?', optionen:['Alles auf einmal reinkippen','Nach und nach zugeben und probieren','Gar nicht probieren'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Nuoc-Cham-Dip', konzept:'Ein kleiner Dip, der dir zeigt, wie viel Balance in wenigen Zutaten steckt.',
+    zutaten:[{menge:'2',einheit:'EL',name:'Limettensaft'},{menge:'2',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'TL',name:'Honig'},{menge:'1',einheit:'',name:'Knoblauchzehe'},{menge:'1',einheit:'',name:'kleine Chili'}],
+    schritte:['Knoblauch und Chili so klein wie möglich hacken.','Limettensaft, Sojasauce und Honig in einer Schüssel verrühren.','Knoblauch und Chili dazugeben.','Kurz probieren – zu sauer? Etwas Honig dazu. Zu mild? Mehr Chili.','5 Minuten ziehen lassen und nochmal probieren.'],
+    anrichten:'In eine kleine Schale füllen, als Dip für Gemüse oder Fleisch.',
+    geschmacksprofil:'Ein kleines Feuerwerk aus allen fünf Geschmacksrichtungen auf einmal.'
+  }
+},
+{ /* 4. Wok-Basics & Hitze */
+  intro:'Der Wok sieht einschüchternd aus, ist aber dein Freund, Schatz – solange du ihn richtig heiß werden lässt und in Bewegung bleibst.',
+  lernziele:['Den Wok gut vorheizen, bevor Öl reinkommt','Gemüse in überschaubaren Stücken schneiden','Immer in Bewegung bleiben beim Braten'],
+  quiz:[
+    {frage:'Warum sollte der Wok richtig heiß sein?', optionen:['Damit nichts anbrennt','Damit das Gemüse Biss behält statt matschig zu werden','Spart Zeit beim Abwasch'], richtig:1},
+    {frage:'Was passiert, wenn du zu viel auf einmal in den Wok gibst?', optionen:['Nichts','Die Temperatur sinkt, alles wird eher gedünstet als gebraten','Es geht schneller'], richtig:1},
+    {frage:'Was tust du während des Bratens die ganze Zeit?', optionen:['Rühren und bewegen','Den Deckel schließen und warten','Die Hitze runterdrehen'], richtig:0}
+  ],
+  praxisrezept:{
+    titel:'Knackiges Gemüse-Stir-Fry', konzept:'Dein erstes Wok-Gericht – einfach gehalten, mit viel Farbe.',
+    zutaten:[{menge:'1',einheit:'',name:'Paprika'},{menge:'1',einheit:'',name:'Karotte'},{menge:'150',einheit:'g',name:'Brokkoli'},{menge:'1',einheit:'EL',name:'Ingwer, gehackt'},{menge:'2',einheit:'',name:'Knoblauchzehen'},{menge:'2',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'EL',name:'Öl'}],
+    schritte:['Gemüse in mundgerechte Stücke schneiden.','Wok oder große Pfanne gut heiß werden lassen, Öl dazu.','Ingwer und Knoblauch kurz anbraten, nicht anbrennen lassen.','Gemüse dazugeben und unter Rühren 4-5 Minuten braten.','Mit Sojasauce abschmecken und servieren.'],
+    anrichten:'Direkt aus der Pfanne auf den Teller geben, solange es noch dampft.',
+    geschmacksprofil:'Knackig und würzig – dein erster echter Wok-Erfolg.'
+  }
+},
+{ /* 5. Marinieren & Würzen */
+  intro:'Eine Marinade ist wie ein kleines Geschenk an dein Essen, Schatz – du gibst ihm Zeit, richtig gut zu werden.',
+  lernziele:['Eine einfache Marinade aus wenigen Zutaten mischen','Verstehen, warum Zeit hier so wichtig ist','Sauber mit rohem Fleisch umgehen'],
+  quiz:[
+    {frage:'Wie lange sollte das Hähnchen mindestens marinieren?', optionen:['5 Minuten reichen','Mindestens 30 Minuten','Es macht keinen Unterschied'], richtig:1},
+    {frage:'Was machst du mit übrig gebliebener Marinade vom rohen Fleisch?', optionen:['Als Sauce weiterverwenden','Wegschütten – aus Hygienegründen','Einfrieren'], richtig:1},
+    {frage:'Was bringt Ingwer in die Marinade?', optionen:['Nur Farbe','Frische und eine milde Schärfe','Süße'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Sojasauce-Ingwer-Hähnchen', konzept:'Ein einfaches, mariniertes Hähnchen – mehr Geduld als Können gefragt.',
+    zutaten:[{menge:'2',einheit:'',name:'Hähnchenbrustfilets'},{menge:'3',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'EL',name:'Ingwer, gehackt'},{menge:'2',einheit:'',name:'Knoblauchzehen'},{menge:'1',einheit:'EL',name:'Honig'},{menge:'1',einheit:'EL',name:'Öl'}],
+    schritte:['Sojasauce, Ingwer, Knoblauch und Honig in einer Schüssel verrühren.','Hähnchen dazulegen und mindestens 30 Minuten im Kühlschrank ziehen lassen.','Öl in einer Pfanne erhitzen.','Hähnchen von beiden Seiten je 5-6 Minuten braten, bis es durch ist.','Kurz ruhen lassen, dann in Scheiben schneiden.'],
+    anrichten:'In Scheiben auf Reis oder Gemüse legen.',
+    geschmacksprofil:'Herzhaft, leicht süß, sehr zart durch die Marinade.'
+  }
+},
+{ /* 6. Brühen & Suppen */
+  intro:'Eine Suppe muss nicht stundenlang köcheln, um gut zu schmecken, Schatz – ein paar gute Zutaten reichen völlig.',
+  lernziele:['Eine einfache Brühe mit wenigen Zutaten aufsetzen','Miso schonend einrühren','Nudeln und Ei richtig timen'],
+  quiz:[
+    {frage:'Warum wird Miso nicht mitgekocht?', optionen:['Wird zu salzig','Verliert bei zu viel Hitze sein Aroma','Färbt die Suppe dunkel'], richtig:1},
+    {frage:'Wann kommen die Nudeln in die Suppe?', optionen:['Ganz am Anfang','Kurz bevor du servierst','Erst danach dazugeben'], richtig:1},
+    {frage:'Was macht eine Brühe schnell würzig?', optionen:['Nur Wasser und Salz','Ingwer, Knoblauch und Sojasauce','Viel Zucker'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Schnelle Miso-Nudelsuppe', konzept:'Eine wärmende Suppe, die viel einfacher geht, als sie aussieht.',
+    zutaten:[{menge:'2',einheit:'EL',name:'Miso-Paste'},{menge:'600',einheit:'ml',name:'Wasser'},{menge:'150',einheit:'g',name:'Nudeln'},{menge:'1',einheit:'',name:'Ei'},{menge:'2',einheit:'',name:'Frühlingszwiebeln'},{menge:'1',einheit:'TL',name:'Sojasauce'}],
+    schritte:['Wasser aufkochen und die Nudeln darin gar kochen.','Ei separat 6-7 Minuten kochen und halbieren.','Etwas heißes Wasser abnehmen, Miso darin glattrühren.','Miso-Mischung zurück in den Topf geben, nicht mehr kochen lassen.','Mit Nudeln, Ei und Frühlingszwiebeln in einer Schale servieren.'],
+    anrichten:'In eine tiefe Schale füllen, Ei obenauf legen.',
+    geschmacksprofil:'Warm, herzhaft, sehr tröstlich.'
+  }
+},
+{ /* 7. Dämpfen */
+  intro:'Dämpfen ist die sanfteste Art zu garen, Schatz – nichts kann hier wirklich schiefgehen.',
+  lernziele:['Einen Dämpfeinsatz einfach aufsetzen','Verstehen, wann Tofu oder Fisch gar sind','Aromen vorher einfach dazulegen'],
+  quiz:[
+    {frage:'Was ist der Vorteil vom Dämpfen?', optionen:['Geht am schnellsten','Schont die Zutat, wird nicht trocken','Gibt die meiste Röstung'], richtig:1},
+    {frage:'Womit garnierst du vor dem Dämpfen?', optionen:['Ingwerstreifen','Nur Salz','Zucker'], richtig:0},
+    {frage:'Woran erkennst du, dass Tofu fertig gedämpft ist?', optionen:['Er wird hart','Er ist durchgehend warm und locker','Er wird braun'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Gedämpfter Tofu mit Ingwer und Sojasauce', konzept:'Ein sanftes Gericht, bei dem wenig schiefgehen kann.',
+    zutaten:[{menge:'300',einheit:'g',name:'Tofu'},{menge:'1',einheit:'EL',name:'Ingwer, in feinen Streifen'},{menge:'2',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'TL',name:'Sesamöl'},{menge:'2',einheit:'',name:'Frühlingszwiebeln'}],
+    schritte:['Tofu in Scheiben schneiden, auf einen hitzefesten Teller legen.','Ingwerstreifen darüber verteilen.','Teller in den Dämpfeinsatz stellen, 8 Minuten dämpfen.','Sojasauce und Sesamöl verrühren.','Über den warmen Tofu geben, mit Frühlingszwiebeln bestreuen.'],
+    anrichten:'Direkt auf dem Dämpfteller servieren.',
+    geschmacksprofil:'Mild, zart, mit einer frischen Ingwernote.'
+  }
+},
+{ /* 8. Abschlussprüfung */
+  intro:'Du hast es fast geschafft, Schatz! Jetzt bringen wir alles zusammen, was du gelernt hast – ganz in deinem Tempo.',
+  lernziele:['Mehrere einfache Gerichte zeitlich aufeinander abstimmen','Dich an dein eigenes Tempo halten','Stolz auf das sein, was du geschafft hast'],
+  quiz:[
+    {frage:'Was hilft am meisten, wenn mehrere Gerichte gleichzeitig fertig werden sollen?', optionen:['Alles gleichzeitig anfangen','Erst das beginnen, was am längsten braucht','Nur ein Gericht kochen'], richtig:1},
+    {frage:'Was gibt dem Reis aus dieser Woche seine Basis?', optionen:['Dämpfen','Waschen und das richtige Wasserverhältnis','Marinieren'], richtig:1},
+    {frage:'Worauf darfst du am Ende stolz sein?', optionen:['Nur auf ein perfektes Ergebnis','Auf jeden einzelnen Schritt, den du gelernt hast','Nur auf die Geschwindigkeit'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Nonnas asiatisches Abschlussmenü', konzept:'Alles, was du gelernt hast, auf einem Teller – ganz ohne Zeitdruck.',
+    zutaten:[{menge:'1',einheit:'Portion',name:'Sojasauce-Ingwer-Hähnchen (Lektion 5)'},{menge:'1',einheit:'Portion',name:'Jasminreis (Lektion 2)'},{menge:'1',einheit:'Portion',name:'Gemüse-Stir-Fry (Lektion 4)'},{menge:'1',einheit:'Portion',name:'Nuoc-Cham-Dip (Lektion 3)'}],
+    schritte:['Reis nach Lektion 2 kochen, warmhalten.','Hähnchen nach Lektion 5 marinieren und braten.','Gemüse nach Lektion 4 kurz braten.','Dip nach Lektion 3 frisch zubereiten.','Alles gemeinsam auf einem Teller anrichten – fertig!'],
+    anrichten:'Reis als Basis, Hähnchen und Gemüse darauf, Dip daneben.',
+    geschmacksprofil:'Dein ganz persönlicher erster Erfolg einer ganzen Kochwoche.'
+  }
+}
+],
+mittel: [
+{ /* 1. Messer & Schnitttechniken */
+  intro:'Ein scharfes Messer und die richtige Schnitttechnik entscheiden über Textur und Garzeit, Schatz. Julienne für Biss, Brunoise für gleichmäßiges Garen – wer das beherrscht, kocht doppelt so entspannt.',
+  lernziele:['Julienne: feine, gleich lange Streifen schneiden','Brunoise: winzige, gleichmäßige Würfel','Gemüse sicher mit der Krallentechnik halten'],
+  quiz:[
+    {frage:'Was bedeutet „Julienne"?', optionen:['Feine, lange Streifen','Winzige Würfel','Grobe Scheiben'], richtig:0},
+    {frage:'Wofür ist die Krallentechnik da?', optionen:['Für mehr Tempo','Zum Schutz der Fingerspitzen','Für schönere Schnitte'], richtig:1},
+    {frage:'Warum sollten Stücke gleich groß sein?', optionen:['Sieht ordentlicher aus','Damit alles gleichzeitig gar wird','Spart Zutaten'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Knackiger Julienne-Gemüsesalat', konzept:'Rohes Gemüse, hauchfein geschnitten, mit einem scharf-süßen Dressing.',
+    zutaten:[{menge:'1',einheit:'',name:'Karotte'},{menge:'1/2',einheit:'',name:'Gurke'},{menge:'2',einheit:'',name:'Frühlingszwiebeln'},{menge:'1',einheit:'EL',name:'Sesam'},{menge:'2',einheit:'EL',name:'Reisessig'},{menge:'1',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'TL',name:'Honig'}],
+    schritte:['Karotte und Gurke in feine Julienne-Streifen schneiden.','Frühlingszwiebeln in dünne Ringe schneiden.','Reisessig, Sojasauce und Honig verrühren.','Gemüse mit dem Dressing vermengen.','Mit Sesam bestreuen und sofort servieren.'],
+    anrichten:'Locker aufgetürmt auf einem flachen Teller, Sesam zum Schluss darüberstreuen.',
+    geschmacksprofil:'Knackig, frisch, mit einer sauer-süßen Kante, die Appetit macht.'
+  }
+},
+{ /* 2. Reis richtig kochen */
+  intro:'Perfekter Reis ist die Basis jeder guten Mahlzeit, Schatz – einmal richtig gelernt, gelingt er dir immer wieder.',
+  lernziele:['Reis vor dem Kochen waschen, bis das Wasser klar ist','Das richtige Wasser-Reis-Verhältnis','Reis nach dem Kochen ruhen lassen'],
+  quiz:[
+    {frage:'Warum wird Reis vor dem Kochen gewaschen?', optionen:['Damit er weißer wird','Um überschüssige Stärke zu entfernen','Aus hygienischen Gründen'], richtig:1},
+    {frage:'Wie lange sollte Reis nach dem Kochen ruhen?', optionen:['Gar nicht','Ca. 10 Minuten zugedeckt','30 Minuten'], richtig:1},
+    {frage:'Was passiert, wenn zu viel Wasser verwendet wird?', optionen:['Reis wird matschig','Reis wird härter','Kein Unterschied'], richtig:0}
+  ],
+  praxisrezept:{
+    titel:'Perfekter Jasminreis mit geröstetem Sesam', konzept:'Duftender Reis als Basis für die ganze Woche.',
+    zutaten:[{menge:'300',einheit:'g',name:'Jasminreis'},{menge:'450',einheit:'ml',name:'Wasser'},{menge:'1',einheit:'EL',name:'Sesam'},{menge:'1',einheit:'TL',name:'Sesamöl'}],
+    schritte:['Reis waschen, bis das Wasser klar ist.','Reis mit Wasser in einem Topf aufkochen.','Hitze reduzieren, zugedeckt 12 Minuten köcheln.','Vom Herd nehmen, 10 Minuten zugedeckt ruhen lassen.','Sesam trocken anrösten, mit Sesamöl über den Reis geben.'],
+    anrichten:'Locker auflockern, in einer Schale servieren, Sesam darüberstreuen.',
+    geschmacksprofil:'Zart, leicht süßlich, mit nussiger Röstnote vom Sesam.'
+  }
+},
+{ /* 3. Die Balance */
+  intro:'Süß, sauer, salzig, scharf, umami – jede gute Küche jongliert mit diesen fünf Polen, Schatz. Wer die Balance versteht, braucht kein Rezept mehr, nur noch ein Gefühl.',
+  lernziele:['Die fünf Geschmacksrichtungen benennen können','Ein Dressing im Kopf austarieren','Schrittweise abschmecken statt alles auf einmal'],
+  quiz:[
+    {frage:'Welche Geschmacksrichtung gleicht Schärfe am besten aus?', optionen:['Süße','Bitterkeit','Mehr Salz'], richtig:0},
+    {frage:'Was ist "Umami"?', optionen:['Eine Chili-Sorte','Herzhafte Tiefe, z.B. durch Sojasauce','Ein Süßungsmittel'], richtig:1},
+    {frage:'Wie sollte man ein Dressing abschmecken?', optionen:['Alle Zutaten auf einmal zugeben','Schrittweise, mit Pausen zum Probieren','Nach Gefühl, ohne zu probieren'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Nuoc-Cham-Dip', konzept:'Der klassische vietnamesische Dip, der alle fünf Geschmacksrichtungen vereint.',
+    zutaten:[{menge:'2',einheit:'EL',name:'Limettensaft'},{menge:'2',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'TL',name:'Honig'},{menge:'1',einheit:'',name:'Knoblauchzehe'},{menge:'1',einheit:'',name:'kleine Chili'}],
+    schritte:['Knoblauch und Chili fein hacken.','Limettensaft, Sojasauce und Honig verrühren.','Knoblauch und Chili einrühren.','5 Minuten ziehen lassen.','Abschmecken und bei Bedarf nachjustieren.'],
+    anrichten:'In einer kleinen Schale servieren, als Dip zu Gemüse oder gebratenem Protein.',
+    geschmacksprofil:'Alle fünf Pole gleichzeitig: süß, sauer, salzig, scharf, umami.'
+  }
+},
+{ /* 4. Wok-Basics & Hitze */
+  intro:'Ein Wok lebt von großer Hitze und Tempo, Schatz. Wer versteht, wie Hitze gesteuert wird, bekommt Gemüse mit Biss statt Matsch.',
+  lernziele:['Den Wok richtig vorheizen','Zutaten nach Garzeit gestaffelt zugeben','Ständige Bewegung als Prinzip'],
+  quiz:[
+    {frage:'Warum muss der Wok stark vorgeheizt werden?', optionen:['Damit nichts anbrennt','Für schnelles Anbraten ohne Matsch','Spart Zeit beim Abwasch'], richtig:1},
+    {frage:'In welcher Reihenfolge kommt Gemüse in den Wok?', optionen:['Alles gleichzeitig','Zuerst das, was am längsten braucht','Zuerst das Schnellste'], richtig:1},
+    {frage:'Warum wird beim Wokken ständig gerührt?', optionen:['Sieht professionell aus','Gleichmäßige Hitzeverteilung, nichts brennt an','Ist nicht nötig'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Knackiges Gemüse-Stir-Fry', konzept:'Schnell gebratenes Gemüse mit Ingwer und Knoblauch, mit Biss statt Matsch.',
+    zutaten:[{menge:'1',einheit:'',name:'Paprika'},{menge:'1',einheit:'',name:'Karotte'},{menge:'150',einheit:'g',name:'Brokkoli'},{menge:'1',einheit:'EL',name:'Ingwer, gehackt'},{menge:'2',einheit:'',name:'Knoblauchzehen'},{menge:'2',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'EL',name:'Öl'}],
+    schritte:['Gemüse in gleich große Stücke schneiden.','Wok stark erhitzen, Öl zugeben.','Ingwer und Knoblauch kurz anbraten.','Gemüse nach Garzeit gestaffelt zugeben, ständig rühren.','Mit Sojasauce ablöschen, sofort servieren.'],
+    anrichten:'Direkt aus dem Wok auf den Teller, farbenfroh angerichtet.',
+    geschmacksprofil:'Knackig, würzig, mit Röstaromen von der großen Hitze.'
+  }
+},
+{ /* 5. Marinieren & Würzen */
+  intro:'Eine gute Marinade zieht Geschmack tief ins Fleisch oder Gemüse, Schatz. Zeit ist hier die wichtigste Zutat.',
+  lernziele:['Eine ausgewogene Marinade zusammenstellen','Die richtige Ziehzeit einschätzen','Marinade und Bratgut sicher trennen'],
+  quiz:[
+    {frage:'Wie lange sollte Hähnchen mindestens marinieren?', optionen:['5 Minuten','Mindestens 30 Minuten','Gar nicht nötig'], richtig:1},
+    {frage:'Warum wird gebrauchte Marinade nicht wiederverwendet?', optionen:['Schmeckt schlechter','Hygiene – sie hatte Kontakt mit rohem Fleisch','Ist zu dünn geworden'], richtig:1},
+    {frage:'Was macht Ingwer in einer Marinade?', optionen:['Nur Farbe','Frische Schärfe und macht Fleisch zarter','Süße'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Sojasauce-Ingwer-Hähnchen', konzept:'Zart mariniertes Hähnchen mit Tiefe durch Ingwer und Knoblauch.',
+    zutaten:[{menge:'2',einheit:'',name:'Hähnchenbrustfilets'},{menge:'3',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'EL',name:'Ingwer, gehackt'},{menge:'2',einheit:'',name:'Knoblauchzehen'},{menge:'1',einheit:'EL',name:'Honig'},{menge:'1',einheit:'EL',name:'Öl'}],
+    schritte:['Sojasauce, Ingwer, Knoblauch und Honig verrühren.','Hähnchen darin mindestens 30 Minuten marinieren.','Öl in der Pfanne erhitzen.','Hähnchen von beiden Seiten goldbraun braten.','Kurz ruhen lassen, dann aufschneiden.'],
+    anrichten:'In Scheiben aufgeschnitten auf Reis oder Gemüse anrichten.',
+    geschmacksprofil:'Herzhaft-süß mit einer warmen Ingwernote.'
+  }
+},
+{ /* 6. Brühen & Suppen */
+  intro:'Eine gute Brühe ist das Rückgrat vieler asiatischer Gerichte, Schatz. Sie muss nicht stundenlang köcheln, um Tiefe zu haben.',
+  lernziele:['Eine schnelle, aromatische Brühe aufbauen','Miso richtig einrühren, ohne zu kochen','Einlagen zum richtigen Zeitpunkt zugeben'],
+  quiz:[
+    {frage:'Warum sollte Miso nicht mitgekocht werden?', optionen:['Wird zu salzig','Verliert Aroma und Nährstoffe bei zu großer Hitze','Färbt die Brühe dunkel'], richtig:1},
+    {frage:'Wann kommen Nudeln in die Suppe?', optionen:['Ganz am Anfang','Kurz vor dem Servieren','Erst nach dem Servieren'], richtig:1},
+    {frage:'Was gibt einer Brühe schnell Tiefe?', optionen:['Nur Wasser und Salz','Ingwer, Knoblauch, Sojasauce','Viel Zucker'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Schnelle Miso-Nudelsuppe', konzept:'Herzhafte Brühe mit Nudeln, Ei und frischen Frühlingszwiebeln.',
+    zutaten:[{menge:'2',einheit:'EL',name:'Miso-Paste'},{menge:'600',einheit:'ml',name:'Wasser'},{menge:'150',einheit:'g',name:'Nudeln'},{menge:'1',einheit:'',name:'Ei'},{menge:'2',einheit:'',name:'Frühlingszwiebeln'},{menge:'1',einheit:'TL',name:'Sojasauce'}],
+    schritte:['Wasser aufkochen, Nudeln darin gar kochen.','Ei separat weich kochen und halbieren.','Etwas heißes Wasser abnehmen, Miso darin glattrühren.','Miso-Mischung zurück in den Topf geben, nicht mehr kochen.','Mit Nudeln, Ei und Frühlingszwiebeln servieren.'],
+    anrichten:'In einer tiefen Schale, Ei aufgeschnitten obenauf, Frühlingszwiebeln darüber.',
+    geschmacksprofil:'Warm, herzhaft, mit sanfter Umami-Tiefe.'
+  }
+},
+{ /* 7. Dämpfen */
+  intro:'Dämpfen bewahrt Textur und Nährstoffe wie kaum eine andere Technik, Schatz – ideal für zarten Fisch oder Tofu.',
+  lernziele:['Einen Dämpfeinsatz richtig aufsetzen','Garzeiten für Fisch und Tofu einschätzen','Aromen vor dem Dämpfen gezielt zugeben'],
+  quiz:[
+    {frage:'Was ist der Vorteil des Dämpfens?', optionen:['Schnellste Garmethode','Schont Textur und Nährstoffe','Gibt die meiste Röstung'], richtig:1},
+    {frage:'Womit wird Fisch vor dem Dämpfen oft gewürzt?', optionen:['Ingwer und Frühlingszwiebel','Nur Salz','Zimt'], richtig:0},
+    {frage:'Woran erkennt man gedämpften Fisch als gar?', optionen:['Er wird durchsichtig','Er lässt sich leicht mit der Gabel teilen','Er wird braun'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Gedämpfter Tofu mit Ingwer und Sojasauce', konzept:'Zarter Tofu, sanft gegart, mit einer würzigen Sojasauce-Ingwer-Note.',
+    zutaten:[{menge:'300',einheit:'g',name:'Tofu'},{menge:'1',einheit:'EL',name:'Ingwer, in feinen Streifen'},{menge:'2',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'TL',name:'Sesamöl'},{menge:'2',einheit:'',name:'Frühlingszwiebeln'}],
+    schritte:['Tofu in Scheiben schneiden, auf einen hitzefesten Teller legen.','Ingwerstreifen darüber verteilen.','Teller in den Dämpfeinsatz stellen, 8 Minuten dämpfen.','Sojasauce und Sesamöl vermengen.','Über den warmen Tofu geben, mit Frühlingszwiebeln bestreuen.'],
+    anrichten:'Direkt auf dem Dämpfteller servieren, Sauce zuletzt darüber.',
+    geschmacksprofil:'Zart, mild-würzig, mit einer frischen Ingwerschärfe.'
+  }
+},
+{ /* 8. Abschlussprüfung */
+  intro:'Jetzt kommt alles zusammen, Schatz: Schnitttechnik, Reis, Balance, Hitze, Marinade, Brühe und Dämpfen – in einem vollständigen Menü.',
+  lernziele:['Mehrere Techniken in einem Menü kombinieren','Timing zwischen mehreren Komponenten planen','Ein Gericht als stimmiges Ganzes anrichten'],
+  quiz:[
+    {frage:'Was ist beim Kombinieren mehrerer Komponenten am wichtigsten?', optionen:['Alles gleichzeitig starten','Timing – was zuerst fertig sein muss, zuletzt beginnen','Nur eine Komponente kochen'], richtig:1},
+    {frage:'Welche Technik aus dieser Woche gibt dem Reis seine Basis?', optionen:['Dämpfen','Waschen und richtiges Wasserverhältnis','Marinieren'], richtig:1},
+    {frage:'Was macht ein Menü zu einem stimmigen Ganzen?', optionen:['Möglichst viele Zutaten','Abgestimmte Balance aus Textur, Schärfe und Würze','Große Portionen'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Nonnas asiatisches Abschlussmenü', konzept:'Sojasauce-Ingwer-Hähnchen auf Jasminreis, mit Gemüse-Stir-Fry und Nuoc-Cham-Dip.',
+    zutaten:[{menge:'1',einheit:'Portion',name:'Sojasauce-Ingwer-Hähnchen (Lektion 5)'},{menge:'1',einheit:'Portion',name:'Jasminreis (Lektion 2)'},{menge:'1',einheit:'Portion',name:'Gemüse-Stir-Fry (Lektion 4)'},{menge:'1',einheit:'Portion',name:'Nuoc-Cham-Dip (Lektion 3)'}],
+    schritte:['Reis nach Lektion 2 kochen und warmhalten.','Hähnchen nach Lektion 5 marinieren und braten.','Kurz vor dem Servieren das Gemüse nach Lektion 4 wokken.','Dip nach Lektion 3 frisch zubereiten.','Alle Komponenten gemeinsam anrichten.'],
+    anrichten:'Reis als Basis, Hähnchen und Gemüse darauf, Dip in einer kleinen Schale daneben.',
+    geschmacksprofil:'Das Zusammenspiel einer ganzen Woche Nonna-Kochschule auf einem Teller.'
+  }
+}
+],
+profi: [
+{ /* 1. Messer & Schnitttechniken */
+  intro:'Zeig mir, was in dir steckt, Schatz. Bei dieser Lektion zählt Präzision: gleichmäßige Julienne, sauberer Schnittwinkel, ruhige Hand.',
+  lernziele:['Julienne auf unter 2mm Breite konstant halten','Den Schnittwinkel für maximale Kontaktfläche optimieren','Tempo und Präzision gleichzeitig steigern'],
+  quiz:[
+    {frage:'Welche Streifenbreite gilt bei klassischer Julienne als Standard?', optionen:['Etwa 2mm','Etwa 1cm','Egal, Hauptsache dünn'], richtig:0},
+    {frage:'Warum beeinflusst der Schnittwinkel die Garzeit?', optionen:['Er tut es nicht','Größere Schnittfläche verkürzt die Garzeit','Nur die Dicke zählt'], richtig:1},
+    {frage:'Was unterscheidet einen geübten von einem ungeübten Schnitt am meisten?', optionen:['Die Lautstärke','Konstanz über viele Stücke hinweg','Die Messermarke'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Julienne-Gemüsesalat mit präzisem Schliff', konzept:'Rohes Gemüse in makellos gleichmäßiger Julienne, mit einem austarierten Dressing.',
+    zutaten:[{menge:'1',einheit:'',name:'Karotte'},{menge:'1/2',einheit:'',name:'Gurke'},{menge:'2',einheit:'',name:'Frühlingszwiebeln'},{menge:'1',einheit:'EL',name:'Sesam'},{menge:'2',einheit:'EL',name:'Reisessig'},{menge:'1',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'TL',name:'Honig'}],
+    schritte:['Karotte und Gurke in konstante 2mm-Julienne schneiden, jedes Stück gleich lang.','Frühlingszwiebeln hauchdünn diagonal schneiden für mehr Fläche.','Dressing exakt austarieren, tropfenweise nachjustieren.','Gemüse erst kurz vor dem Servieren mit dem Dressing vermengen, damit es knackig bleibt.','Sesam frisch anrösten und erst im letzten Moment darüberstreuen.'],
+    anrichten:'Architektonisch aufgebaut, Höhe und Struktur betonen statt nur aufzuhäufen.',
+    geschmacksprofil:'Präzise austariert, jede Komponente einzeln erkennbar und doch im Einklang.'
+  }
+},
+{ /* 2. Reis richtig kochen */
+  intro:'Reis ist die Königsdisziplin der Einfachheit, Schatz – gerade weil so wenig dazugehört, verzeiht er keine Nachlässigkeit.',
+  lernziele:['Das Wasser-Reis-Verhältnis an die Reissorte anpassen','Die Ruhephase als eigenständigen Garschritt verstehen','Sesam auf den Punkt rösten, ohne zu verbrennen'],
+  quiz:[
+    {frage:'Warum variiert das Wasser-Reis-Verhältnis je nach Sorte?', optionen:['Tut es nicht','Unterschiedliche Stärke- und Feuchtigkeitsgehalte','Nur Geschmackssache'], richtig:1},
+    {frage:'Was passiert biochemisch während der Ruhephase?', optionen:['Nichts Relevantes','Feuchtigkeit verteilt sich gleichmäßig im Korn nach','Der Reis kühlt nur ab'], richtig:1},
+    {frage:'Woran erkennst du optimal gerösteten Sesam?', optionen:['Er wird komplett dunkel','Goldbraun und deutlich duftend, kurz vor der Bitterkeit','Er springt in der Pfanne'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Perfekter Jasminreis mit geröstetem Sesam', konzept:'Reis auf Restaurant-Niveau – die Ruhephase entscheidet über die Textur.',
+    zutaten:[{menge:'300',einheit:'g',name:'Jasminreis'},{menge:'450',einheit:'ml',name:'Wasser'},{menge:'1',einheit:'EL',name:'Sesam'},{menge:'1',einheit:'TL',name:'Sesamöl'}],
+    schritte:['Reis waschen, bis das Wasser vollkommen klar ist – das dauert länger als gedacht.','Reis und Wasser exakt abgemessen aufkochen.','Auf kleinster Stufe exakt 12 Minuten köcheln, ohne den Deckel zu lüften.','Vom Herd nehmen und mindestens 10 Minuten ruhen lassen – das ist kein optionaler Schritt.','Sesam bis kurz vor der Bitterkeitsgrenze rösten, sofort mit Sesamöl über den Reis geben.'],
+    anrichten:'In einer vorgewärmten Schale servieren, damit die Temperatur konstant bleibt.',
+    geschmacksprofil:'Feine Balance zwischen Süße des Reises und Röstnote des Sesams.'
+  }
+},
+{ /* 3. Die Balance */
+  intro:'Jetzt wird es interessant, Schatz: Bei dieser Stufe geht es nicht mehr ums Erkennen der fünf Pole, sondern ums gezielte Verschieben der Balance.',
+  lernziele:['Die Balance bewusst in eine Richtung verschieben können','Mit minimalen Mengenänderungen große Wirkung erzielen','Ein Dressing ohne Rezept aus dem Gefühl bauen'],
+  quiz:[
+    {frage:'Was passiert, wenn du Süße reduzierst, aber Säure gleich lässt?', optionen:['Nichts verändert sich','Das Gericht wirkt schärfer und aggressiver in der Säure','Es wird automatisch salziger'], richtig:1},
+    {frage:'Warum reicht oft schon 1/4 Teelöffel, um die Balance zu kippen?', optionen:['Tut es nicht','Bei kleinen Mengen wirkt jede Zutat verhältnismäßig stark','Nur bei Salz relevant'], richtig:1},
+    {frage:'Wie baust du ein Dressing ganz ohne Rezept auf?', optionen:['Zufällig mischen','Mit einer Basis starten und iterativ in eine Richtung schmecken','Nur nach Optik entscheiden'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Nuoc-Cham-Dip, präzise austariert', konzept:'Derselbe Dip, aber bewusst auf eine schärfere, tiefere Balance gezogen.',
+    zutaten:[{menge:'2',einheit:'EL',name:'Limettensaft'},{menge:'2',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'TL',name:'Honig'},{menge:'1',einheit:'',name:'Knoblauchzehe'},{menge:'1',einheit:'',name:'kleine Chili'}],
+    schritte:['Knoblauch und Chili extrem fein hacken, fast zu einer Paste.','Basis aus Limettensaft und Sojasauce ansetzen.','Honig in 1/4-Teelöffel-Schritten einrühren und nach jedem Schritt abschmecken.','Knoblauch und Chili einrühren, kurz ziehen lassen.','Am Ende bewusst in eine Richtung nachschärfen – mehr Säure oder mehr Schärfe, deine Entscheidung.'],
+    anrichten:'In einer kleinen, edlen Schale, als Statement-Dip serviert.',
+    geschmacksprofil:'Komplex und bewusst zugespitzt, keine zufällige Balance.'
+  }
+},
+{ /* 4. Wok-Basics & Hitze */
+  intro:'Hier zeigt sich, wer den Wok wirklich beherrscht, Schatz: maximale Hitze, minimale Reaktionszeit.',
+  lernziele:['Die Wok-Hei-Note durch richtige Hitzeführung erzeugen','Mehrere Zutaten mit unterschiedlicher Garzeit exakt timen','Den Wok durch Schwenken statt Rühren bewegen'],
+  quiz:[
+    {frage:'Was ist "Wok Hei"?', optionen:['Ein Gewürz','Die charakteristische Röstnote durch extreme Hitze','Eine Wok-Marke'], richtig:1},
+    {frage:'Warum wird professionell geschwenkt statt mit dem Löffel gerührt?', optionen:['Sieht besser aus','Gleichmäßigere Hitzeverteilung ohne Temperaturverlust','Ist einfacher'], richtig:1},
+    {frage:'Was passiert, wenn du Gemüse mit sehr unterschiedlicher Garzeit gleichzeitig zugibst?', optionen:['Kein Unterschied','Manches wird matschig, während anderes noch roh ist','Alles gart automatisch gleich'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Gemüse-Stir-Fry mit Wok-Hei', konzept:'Stir-Fry auf Restaurant-Niveau, mit echter Röstnote durch maximale Hitze.',
+    zutaten:[{menge:'1',einheit:'',name:'Paprika'},{menge:'1',einheit:'',name:'Karotte'},{menge:'150',einheit:'g',name:'Brokkoli'},{menge:'1',einheit:'EL',name:'Ingwer, gehackt'},{menge:'2',einheit:'',name:'Knoblauchzehen'},{menge:'2',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'EL',name:'Öl'}],
+    schritte:['Gemüse nach Garzeit sortiert bereitlegen, alles griffbereit.','Wok bis zum Rauchpunkt erhitzen – das ist Absicht, keine Panne.','Ingwer und Knoblauch nur Sekunden anbraten, dann sofort das härteste Gemüse dazu.','Restliches Gemüse gestaffelt zugeben, durch Schwenken statt Rühren bewegen.','Mit Sojasauce am Wokrand ablöschen für zusätzliches Aroma, sofort servieren.'],
+    anrichten:'Sofort servieren, solange die Röstnote noch spürbar ist.',
+    geschmacksprofil:'Intensiv, rauchig-würzig, mit spürbarem Wok-Charakter.'
+  }
+},
+{ /* 5. Marinieren & Würzen */
+  intro:'Eine Marinade auf Profi-Niveau ist Chemie, Schatz: Säure, Salz und Zeit arbeiten zusammen, um Textur gezielt zu verändern.',
+  lernziele:['Die Wirkung von Säure auf Proteinstruktur verstehen','Ziehzeit exakt an die Fleischdicke anpassen','Eine mehrschichtige Marinade komponieren'],
+  quiz:[
+    {frage:'Was bewirkt zu lange Marinierzeit mit viel Säure?', optionen:['Nichts','Das Protein wird mürbe und matschig statt zart','Es wird automatisch würziger'], richtig:1},
+    {frage:'Warum sollte die Ziehzeit an die Fleischdicke angepasst werden?', optionen:['Ist irrelevant','Dickeres Fleisch braucht länger, um die Marinade aufzunehmen','Nur die Außenseite zählt'], richtig:1},
+    {frage:'Was macht eine Marinade "mehrschichtig"?', optionen:['Mehrere Marinierschritte nacheinander','Nur mehr Zutaten','Höhere Temperatur'], richtig:0}
+  ],
+  praxisrezept:{
+    titel:'Sojasauce-Ingwer-Hähnchen, doppelt mariniert', konzept:'Zwei Marinierschritte für maximale Tiefe und Zartheit.',
+    zutaten:[{menge:'2',einheit:'',name:'Hähnchenbrustfilets'},{menge:'3',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'EL',name:'Ingwer, gehackt'},{menge:'2',einheit:'',name:'Knoblauchzehen'},{menge:'1',einheit:'EL',name:'Honig'},{menge:'1',einheit:'EL',name:'Öl'}],
+    schritte:['Hähnchen zuerst 15 Minuten in reiner Sojasauce vormarinieren, um Salz einziehen zu lassen.','Ingwer, Knoblauch und Honig dazugeben, weitere 30 Minuten ziehen lassen.','Öl auf hoher Stufe erhitzen, Hähnchen scharf anbraten für Röstaromen.','Hitze reduzieren, gardämpfen, bis der Kern durch ist.','Vor dem Aufschneiden mindestens 5 Minuten ruhen lassen, damit sich der Saft verteilt.'],
+    anrichten:'Diagonal aufgeschnitten, damit die Faserstruktur sichtbar wird.',
+    geschmacksprofil:'Tief durchgezogen, komplexer als eine einfache Marinade es erlaubt.'
+  }
+},
+{ /* 6. Brühen & Suppen */
+  intro:'Eine Brühe auf diesem Niveau baut Schichten auf, Schatz – jede Zutat bekommt ihren eigenen Moment.',
+  lernziele:['Eine Brühe in Schichten statt auf einmal aufbauen','Miso-Sorten nach Intensität einschätzen','Die Suppe im letzten Moment noch fein justieren'],
+  quiz:[
+    {frage:'Warum wird eine Brühe in Schichten aufgebaut?', optionen:['Spart keine Zeit, aber schafft mehr Tiefe','Ist nur Show','Verändert nichts am Geschmack'], richtig:0},
+    {frage:'Was unterscheidet helle von dunkler Miso-Paste?', optionen:['Nur die Farbe','Dunkle Miso ist intensiver und salziger gereift','Kein Unterschied'], richtig:1},
+    {frage:'Wann nimmst du die letzte Geschmacksjustierung vor?', optionen:['Ganz am Anfang','Unmittelbar vor dem Servieren','Erst beim Essen selbst'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Miso-Nudelsuppe mit geschichtetem Aroma', konzept:'Eine Suppe, die Tiefe durch bewusst getrennte Aromastufen gewinnt.',
+    zutaten:[{menge:'2',einheit:'EL',name:'Miso-Paste'},{menge:'600',einheit:'ml',name:'Wasser'},{menge:'150',einheit:'g',name:'Nudeln'},{menge:'1',einheit:'',name:'Ei'},{menge:'2',einheit:'',name:'Frühlingszwiebeln'},{menge:'1',einheit:'TL',name:'Sojasauce'}],
+    schritte:['Wasser mit einem Teil der Frühlingszwiebel-Grün-Enden leicht aromatisieren, dann entfernen.','Nudeln separat al dente kochen, damit die Brühe klar bleibt.','Ei exakt 6,5 Minuten kochen für einen cremigen, halbflüssigen Kern.','Miso erst ganz zum Schluss und nur lauwarm einrühren, um Aroma zu erhalten.','Kurz vor dem Servieren final mit Sojasauce nachjustieren.'],
+    anrichten:'Nudeln zuerst einlegen, Brühe vorsichtig angießen, Ei und Frühlingszwiebel zuletzt.',
+    geschmacksprofil:'Vielschichtig, mit klar unterscheidbaren Aromaebenen statt einem einzigen Geschmack.'
+  }
+},
+{ /* 7. Dämpfen */
+  intro:'Dämpfen auf Profi-Niveau bedeutet, den Punkt zwischen gar und perfekt auf die Sekunde zu treffen, Schatz.',
+  lernziele:['Garpunkte bei Tofu und Fisch auf die Minute genau treffen','Aromen in mehreren Dämpfstufen einbringen','Sauce erst im letzten Moment komponieren, um Frische zu bewahren'],
+  quiz:[
+    {frage:'Was passiert bei zu langer Dämpfzeit von Tofu?', optionen:['Nichts Relevantes','Er wird schwammig und verliert Textur','Er wird fester und besser'], richtig:1},
+    {frage:'Warum werden Aromen manchmal in zwei Dämpfstufen eingebracht?', optionen:['Unnötiger Aufwand','Frische und intensive Aromen brauchen unterschiedliche Hitzezeiten','Spart Zutaten'], richtig:1},
+    {frage:'Wann wird die Sauce final abgeschmeckt?', optionen:['Vor dem Dämpfen','Unmittelbar vor dem Servieren','Am nächsten Tag'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Gedämpfter Tofu, zweistufig aromatisiert', konzept:'Tofu mit exakt getroffenem Garpunkt und einer im letzten Moment komponierten Sauce.',
+    zutaten:[{menge:'300',einheit:'g',name:'Tofu'},{menge:'1',einheit:'EL',name:'Ingwer, in feinen Streifen'},{menge:'2',einheit:'EL',name:'Sojasauce'},{menge:'1',einheit:'TL',name:'Sesamöl'},{menge:'2',einheit:'',name:'Frühlingszwiebeln'}],
+    schritte:['Die Hälfte des Ingwers vor dem Dämpfen auf den Tofu legen für milde Aromatisierung.','Exakt 8 Minuten dämpfen, keine Minute länger.','Die zweite Hälfte des frischen Ingwers erst nach dem Dämpfen zugeben für Frische.','Sojasauce und Sesamöl unmittelbar vor dem Servieren verrühren, nicht vorher.','Sauce über den noch heißen Tofu geben, sofort servieren.'],
+    anrichten:'Minimalistisch, die Textur des Tofus soll sichtbar bleiben.',
+    geschmacksprofil:'Zwei Ingwer-Ebenen: mild-gegart und frisch-scharf im Kontrast.'
+  }
+},
+{ /* 8. Abschlussprüfung */
+  intro:'Die Meisterprüfung, Schatz. Kein Schritt für Schritt mehr – zeig, dass du das Timing im Kopf hast.',
+  lernziele:['Vier Komponenten ohne Anleitung zeitlich orchestrieren','Auf einen Blick erkennen, was als Nächstes drankommt','Ein Menü mit der Präzision eines Profis anrichten'],
+  quiz:[
+    {frage:'Welche Komponente sollte zuerst begonnen werden?', optionen:['Die schnellste','Die, die am längsten braucht und am besten wartet','Die schwierigste'], richtig:1},
+    {frage:'Was unterscheidet einen Profi-Ablauf von einem Anfänger-Ablauf?', optionen:['Mehr Zutaten','Paralleles statt sequenzielles Arbeiten','Lautere Musik in der Küche'], richtig:1},
+    {frage:'Woran erkennt man ein wirklich stimmiges Menü?', optionen:['Möglichst viele Elemente','Jede Komponente ist im perfekten Moment fertig und ergänzt die anderen','Große Portionen'], richtig:1}
+  ],
+  praxisrezept:{
+    titel:'Nonnas asiatisches Abschlussmenü, im Profi-Timing', konzept:'Vier Komponenten, parallel und ohne Leerlauf orchestriert.',
+    zutaten:[{menge:'1',einheit:'Portion',name:'Sojasauce-Ingwer-Hähnchen (Lektion 5)'},{menge:'1',einheit:'Portion',name:'Jasminreis (Lektion 2)'},{menge:'1',einheit:'Portion',name:'Gemüse-Stir-Fry (Lektion 4)'},{menge:'1',einheit:'Portion',name:'Nuoc-Cham-Dip (Lektion 3)'}],
+    schritte:['Reis zuerst ansetzen – er braucht die längste Zeit und wartet am geduldigsten.','Während der Reis ruht, Hähnchen marinieren und parallel den Dip komponieren.','Hähnchen anbraten, während der Wok für das Gemüse vorheizt.','Gemüse erst in den letzten 4 Minuten wokken, während das Hähnchen fertig gart.','Alle vier Komponenten gleichzeitig auf den Punkt anrichten, ohne Wartezeit dazwischen.'],
+    anrichten:'Mit der Präzision eines Menüs komponiert, nicht nur nebeneinandergelegt.',
+    geschmacksprofil:'Das volle Zusammenspiel einer Woche Technik – auf den Punkt getimt.'
+  }
+}
+]
+};
+/* Zutaten gegliedert nach Lektion – zeigt, WANN was gebraucht wird (Zutaten sind stufenübergreifend identisch) */
+function schoolIngredientsByLesson(){
+  return LESSON_CONTENT.mittel.map((l,i)=>({
+    idx:i, titel:LESSONS[i].t,
+    zutaten:(l.praxisrezept.zutaten||[]).map(z=>`${z.menge?z.menge+' ':''}${z.einheit?z.einheit+' ':''}${z.name}`)
+  }));
+}
+
+const PHRASES = {
+ concepts:['Nonna schnuppert an deinen Zutaten …','Fünf Ideen köcheln schon …','Ein Hauch Salz, ein Hauch Mut …','Gleich wird abgeschmeckt …'],
+ detail:['Nonna schreibt das Rezept auf …','Schritt für Schritt, mit Liebe …','Die Mengen werden abgewogen …'],
+ meal:['Nonna plant deine Woche …','Erst vorbereiten, dann genießen …','Die Vorratskammer wird sortiert …'],
+ lesson:['Nonna bereitet deine Lektion vor …','Heute lernst du was fürs Leben …','Übung macht den Küchenmeister …']
+};
+
+/* ============ STORAGE ============ */
+/* localStorage ist auf file://-Origins (v.a. Safari, Privates Fenster) manchmal blockiert
+   oder wirft beim Schreiben – daher zusätzlich ein In-Memory-Fallback, damit ein Wert
+   innerhalb der laufenden Session immer verlässlich gespeichert bleibt. */
+const __memoryStorage = {};
+async function sget(key){
+  try{
+    const raw = localStorage.getItem(key);
+    if(raw!==null) return JSON.parse(raw);
+  }catch(e){}
+  return Object.prototype.hasOwnProperty.call(__memoryStorage,key) ? __memoryStorage[key] : null;
+}
+async function sset(key,val){
+  __memoryStorage[key]=val;
+  try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){ console.warn('storage',e); }
+}
+
+async function loadAll(){
+  const [pro,usage,favs,answers,mealplan,school,account,schoolLevel,apiKey] = await Promise.all([
+    sget('nonna:pro'), sget('nonna:usage'), sget('nonna:favorites'),
+    sget('nonna:answers'), sget('nonna:mealplan'), sget('nonna:school'), sget('nonna:account'), sget('nonna:schoolLevel'),
+    sget('nonna:apiKey')
+  ]);
+  S.pro = !!pro;
+  S.usage = Array.isArray(usage)?usage:[];
+  S.favs = Array.isArray(favs)?favs:[];
+  S.answers = answers||null;
+  S.mealplan = mealplan||null;
+  S.account = account||null;
+  S.apiKey = apiKey||null;
+  if(school) S.school = school;
+  if(schoolLevel) S.sc.level = schoolLevel;
+}
+
+/* ============ API ============ */
+const SYSTEM_CHEF = `Du agierst als Spitzenkoch und Wettbewerbs-Finalist – bekannt für kulinarische Kreativität, handwerkliche Perfektion und exzellentes Gespür für Geschmack, Textur und Balance.
+Harte Regeln:
+- Arbeite ausschließlich mit den übergebenen Zutaten. Kreative Freiheit hast du nur bei Gewürzen, Kräutern und Grundzutaten (Öl, Salz, Pfeffer, Butter, Zitrone, Essig, Fonds).
+- Berücksichtige die Angaben des Nutzers (handwerkliches Geschick, Küchenstil, Ausstattung, Zeit, Personenzahl) strikt.
+- Gerichte dürfen überraschen und müssen keine existierenden Klassiker sein. Jedes Gericht ist eigenständig mit klarem Konzept.
+- Sprache: professionell, lebendig, inspirierend – aber textlich kurz und übersichtlich.
+- Erwähne nirgendwo "The Taste".
+- Antworte AUSSCHLIESSLICH mit validem JSON nach dem vorgegebenen Schema. Kein Markdown, keine Backticks, kein Text davor oder danach.`;
+
+function extractJSON(text){
+  let t = text.replace(/```json|```/g,'').trim();
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if(a===-1||b===-1) throw new Error('kein JSON gefunden');
+  return JSON.parse(t.slice(a,b+1));
+}
+
+/* ============ API-KEY ============ */
+function ensureApiKey(){
+  return new Promise((resolve,reject)=>{
+    if(S.apiKey){ resolve(S.apiKey); return; }
+    openApiKeyModal(resolve,reject);
+  });
+}
+function changeApiKey(){
+  return new Promise((resolve,reject)=>{ openApiKeyModal(resolve,reject); });
+}
+function openApiKeyModal(resolve,reject){
+  S._apiKeyResolve = resolve;
+  S._apiKeyReject = reject;
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)cancelApiKey()">
+    <div class="sheet">
+      <h2>Dein Küchenschlüssel</h2>
+      <p class="sub" style="margin-bottom:var(--s4)">Nonna kocht mit deinem eigenen Anthropic-API-Key. Er wird nur auf diesem Gerät gespeichert, nie an Dritte weitergegeben.</p>
+      <div class="stack">
+        <input class="field" id="apiKeyInput" type="password" placeholder="sk-ant-..." autocomplete="off">
+        <button class="btn" onclick="submitApiKey()">Schlüssel speichern</button>
+        <button class="btn ghost" onclick="cancelApiKey()">Abbrechen</button>
+      </div>
+      <p class="usage-note" id="apiKeyErr" style="color:var(--bad)"></p>
+      <p class="usage-note">Einen Key bekommst du unter console.anthropic.com/settings/keys.</p>
+    </div>
+  </div>`;
+  setTimeout(()=>{ const inp=el('apiKeyInput'); if(inp) inp.focus(); },50);
+}
+async function submitApiKey(){
+  const key = (el('apiKeyInput')?.value||'').trim();
+  if(!key){ const e=el('apiKeyErr'); if(e) e.textContent='Bitte gib deinen API-Key ein.'; return; }
+  S.apiKey = key;
+  await sset('nonna:apiKey', key);
+  closeModal();
+  const resolve = S._apiKeyResolve; S._apiKeyResolve=null; S._apiKeyReject=null;
+  if(resolve) resolve(key);
+}
+function cancelApiKey(){
+  closeModal();
+  const reject = S._apiKeyReject; S._apiKeyResolve=null; S._apiKeyReject=null;
+  if(reject) reject(new Error('Kein API-Key hinterlegt – Nonna braucht ihn zum Kochen.'));
+}
+async function clearApiKey(){ S.apiKey=null; await sset('nonna:apiKey', null); openProfile(); }
+
+async function askClaude(userPrompt, system=SYSTEM_CHEF, maxTokens=1400){
+  const apiKey = await ensureApiKey();
+  const call = async (tokens)=>{
+    /* Wichtig: KEIN AbortSignal – der Vorschau-Proxy kann das Objekt nicht klonen.
+       Timeout deshalb über Promise.race. */
+    let res;
+    try{
+      const fetchP = fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-direct-browser-access':'true'
+        },
+        body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:tokens, system,
+          messages:[{role:'user', content:userPrompt}] })
+      });
+      const timeoutP = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')),60000));
+      res = await Promise.race([fetchP, timeoutP]);
+    }catch(netErr){
+      if(netErr.message==='TIMEOUT') throw new Error('Zeitüberschreitung nach 60 Sekunden – der Server hat nicht geantwortet.');
+      throw new Error('Netzwerk: '+netErr.message+'.');
+    }
+    const data = await res.json().catch(()=>({}));
+    if(data.error){
+      if(res.status===401){ S.apiKey=null; await sset('nonna:apiKey', null); }
+      throw new Error('API '+res.status+': '+(data.error.message||data.error.type||'unbekannt'));
+    }
+    if(!res.ok) throw new Error('API-Status '+res.status);
+    const text = (data.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');
+    if(!text.trim()) throw new Error('Leere Antwort vom Modell');
+    try{ return extractJSON(text); }
+    catch(pe){
+      if(data.stop_reason==='max_tokens'){ const e=new Error('Antwort abgeschnitten (max_tokens) – JSON unvollständig'); e.maxTokensHit=true; throw e; }
+      throw new Error('JSON nicht lesbar: '+pe.message);
+    }
+  };
+  try{ return await call(maxTokens); }
+  catch(e){
+    /* Bei abgeschnittener Antwort: mit deutlich höherem Limit erneut versuchen, statt identisch zu wiederholen */
+    const retryTokens = e.maxTokensHit ? Math.min(4000, Math.round(maxTokens*1.8)) : maxTokens;
+    try{ return await call(retryTokens); }
+    catch(e2){ S.lastErr = e2.message; throw e2; }
+  }
+}
+
+/* ============ FREEMIUM ============ */
+function usageLeft(){
+  const now = Date.now();
+  S.usage = S.usage.filter(t => now - t < WEEK);
+  return Math.max(0, FREE_LIMIT - S.usage.length);
+}
+async function consumeUsage(){ S.usage.push(Date.now()); await sset('nonna:usage', S.usage); }
+
+/* ============ HELPERS ============ */
+const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function el(id){ return document.getElementById(id); }
+function answersText(a){ return QUESTIONS.map(q=>`${q.q} → ${a[q.key]}`).join('\n'); }
+function stopLoader(){ if(S.loadTimer){ clearInterval(S.loadTimer); S.loadTimer=null; } }
+
+/* Generisch: jede Zutaten-/Einkaufsliste in der App lässt sich damit herunterladen oder teilen */
+function downloadText(filename, content){
+  const blob=new Blob([content],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+async function shareOrDownloadText(title, content, filename){
+  if(navigator.share){
+    try{ await navigator.share({title, text:content}); return; }
+    catch(e){ /* Nutzer hat abgebrochen oder Teilen fehlgeschlagen – Fallback unten */ }
+  }
+  downloadText(filename, content);
+}
+function setPhrase(t){ const p=el('phrase'); if(p) p.textContent=t; }
+
+function loaderHTML(kind){
+  const ph = PHRASES[kind]||PHRASES.concepts;
+  setTimeout(()=>{
+    let i=0; stopLoader();
+    S.loadTimer = setInterval(()=>{
+      const p = el('phrase'); if(!p){stopLoader();return;}
+      if(p.dataset.lock==='1') return;
+      i=(i+1)%ph.length; p.textContent = ph[i];
+    }, 2600);
+  },0);
+  return `<div class="loader">
+    <svg class="pot" viewBox="0 0 120 120">
+      <path class="steam" d="M45 38c0-8 6-8 6-16"/>
+      <path class="steam s2" d="M60 36c0-8 6-8 6-16"/>
+      <path class="steam s3" d="M75 38c0-8 6-8 6-16"/>
+      <rect x="24" y="52" width="72" height="40" rx="10" fill="#2F5B7C"/>
+      <rect x="14" y="56" width="12" height="7" rx="3.5" fill="#5E92B5"/>
+      <rect x="94" y="56" width="12" height="7" rx="3.5" fill="#5E92B5"/>
+      <ellipse cx="60" cy="52" rx="36" ry="6" fill="#A6C6DC"/>
+      <g class="spoon"><rect x="57" y="18" width="6" height="42" rx="3" fill="#E3A85C"/><ellipse cx="60" cy="20" rx="8" ry="6" fill="#E3A85C"/></g>
+    </svg>
+    <div>
+      <div class="phrase" id="phrase">${esc(ph[0])}</div>
+      <div class="small">Echte KI am Herd – das dauert einen Moment.</div>
+    </div>
+  </div>`;
+}
+
+function errHTML(retryFn){
+  return `<div class="err-box card">
+    <div class="e">🫕</div>
+    <b style="font-family:var(--display);font-size:18px;display:block;margin-bottom:6px">Da ist etwas angebrannt.</b>
+    <p class="sub" style="margin-bottom:16px">Die Verbindung zur Küche hat nicht geklappt. Der Topf steht noch auf dem Herd.</p>
+    ${S.lastErr?`<p style="font-size:12px;color:var(--muted);background:var(--blue-050);border-radius:10px;padding:10px 12px;margin-bottom:16px;word-break:break-word">Technische Ursache: ${esc(S.lastErr)}</p>`:''}
+    <button class="btn" onclick="${retryFn}">Nochmal versuchen</button>
+  </div>`;
+}
+
+/* ============ RENDER: ROOT ============ */
+function render(){
+  stopLoader();
+  el('proBadge').textContent = S.pro ? '★ Famiglia' : 'Profil';
+  el('proBadge').className = 'chip-btn'+(S.pro?' pro-on':'');
+  renderTabbar();
+  renderHeaderHeart();
+  const app = el('app');
+  if(S.tab==='cook') app.innerHTML = viewCook();
+  else if(S.tab==='fav') app.innerHTML = viewFav();
+  else if(S.tab==='meal') app.innerHTML = viewMeal();
+  else if(S.tab==='school') app.innerHTML = viewSchool();
+  app.scrollTop = 0; window.scrollTo(0,0);
+}
+function renderHeaderHeart(){
+  const r = (S.tab==='cook' && S.gen.step==='detail' && S.gen.detail) ? S.gen.detail
+    : (S.tab==='fav' && S.fav.view==='detail' && S.fav.open) ? S.fav.open
+    : (S.tab==='meal' && S.mp.step==='detail' && S.mp.detail) ? S.mp.detail
+    : null;
+  const btn = el('headerHeart');
+  if(!r){ btn.style.display='none'; return; }
+  const isFav = S.favs.some(f=>f.titel===r.titel);
+  btn.style.display='flex';
+  btn.className = 'heart-badge'+(isFav?' on':'');
+  btn.textContent = isFav?'♥':'♡';
+}
+function renderTabbar(){
+  const tabs=[
+    {id:'cook', ic:'🍳', l:'Kochen'},
+    {id:'fav', ic:'❤️', l:'Lieblinge', pro:true},
+    {id:'meal', ic:'🗓️', l:'Meal-Prep', pro:true},
+    {id:'school', ic:'🎓', l:'Kochschule', pro:true}
+  ];
+  el('tabbar').innerHTML = tabs.map(t=>`
+    <button class="${S.tab===t.id?'on':''}" onclick="goTab('${t.id}')">
+      <span class="ic">${t.ic}</span>${t.l}${t.pro&&!S.pro?'<span class="lock-mini">🔒 Famiglia</span>':''}
+    </button>`).join('');
+}
+function goTab(t){ S.tab=t; render(); track('screen_view', {screen_name:t}); }
+
+/* ============ STRANG 1: GENERATOR ============ */
+function viewCook(){
+  const g=S.gen;
+  if(g.step==='input') return cookInput();
+  if(g.step==='shortcut') return cookShortcut();
+  if(g.step==='questions') return cookQuestion();
+  if(g.step==='loadingConcepts') return loaderHTML('concepts');
+  if(g.step==='concepts') return cookConcepts();
+  if(g.step==='loadingDetail') return loaderHTML('detail');
+  if(g.step==='detail') return recipeHTML(g.detail, 'backToConcepts()');
+  if(g.step==='error') return errHTML(g.retry||'restartGen()');
+  return cookInput();
+}
+
+function cookInput(){
+  const g=S.gen; const left=usageLeft();
+  return `
+  <h1 class="screen" style="font-size:clamp(17px,5.4vw,26px);white-space:nowrap;margin-bottom:var(--s5)">Was hast du denn da, mein Schatz?</h1>
+  <div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">Kühlschrank auf, alles auf den Tisch. Ich mach was draus – versprochen.</div></div>
+  <textarea class="field" id="ingInput" rows="2" placeholder="z. B. Hähnchen, Zucchini, Feta …"></textarea>
+  <button class="btn ghost" style="margin-top:var(--s2)" onclick="addIngredients()">Zutaten hinzufügen</button>
+  <div class="chips">${g.ingredients.map((z,i)=>`<span class="chip">${esc(z)}<button onclick="removeIng(${i})" aria-label="Entfernen">✕</button></span>`).join('')}</div>
+  <button class="btn" style="margin-top:var(--s2)" ${g.ingredients.length<2?'disabled':''} onclick="startQuestions()">Weiter ${g.ingredients.length<2?'(mind. 2 Zutaten)':''}</button>
+  <p class="usage-note">${S.pro?'★ Famiglia aktiv':S.account?`Noch ${left} von ${FREE_LIMIT} Gratis-Runden diese Woche`:'Kostenlos anmelden und 2 Rezeptrunden pro Woche sichern.'}</p>`;
+}
+function addIngredients(){
+  const inp = el('ingInput'); if(!inp) return;
+  addIngredientsSilent(inp.value);
+  inp.value=''; render(); setTimeout(()=>{const i=el('ingInput'); if(i) i.focus();},0);
+}
+function addIngredientsSilent(v){
+  const parts = v.split(/[,\n;]+/).map(s=>s.trim()).filter(Boolean);
+  for(const p of parts){ if(!S.gen.ingredients.some(x=>x.toLowerCase()===p.toLowerCase())) S.gen.ingredients.push(p); }
+}
+function removeIng(i){ S.gen.ingredients.splice(i,1); render(); }
+
+function startQuestions(){
+  const inp = el('ingInput');
+  if(inp && inp.value.trim()) addIngredientsSilent(inp.value);
+  if(S.gen.ingredients.length<2){ render(); return; }
+  if(S.answers){ S.gen.step='shortcut'; }
+  else { S.gen.step='questions'; S.gen.qIndex=0; S.gen.draft={}; }
+  render();
+}
+
+function cookShortcut(){
+  const a=S.answers;
+  return `
+  <div class="q-wrap">
+    <div class="q-eyebrow">Fast fertig</div>
+    <div class="q-title">Wie letztes Mal?</div>
+    <div class="card" style="margin-bottom:var(--s5)">
+      ${QUESTIONS.map(q=>`<div class="summary-line"><span>${Q_SHORT[q.key]}</span><b>${esc(a[q.key])}</b></div>`).join('')}
+    </div>
+    <div class="stack">
+      <button class="btn" onclick="useLastAnswers()">Los geht's 🍳</button>
+      <button class="btn ghost" onclick="editAnswers()">Anpassen</button>
+    </div>
+  </div>`;
+}
+function useLastAnswers(){ S.gen.draft = {...S.answers}; generateConcepts(); }
+function editAnswers(){ S.gen.step='questions'; S.gen.qIndex=0; S.gen.draft={...S.answers}; render(); }
+
+function cookQuestion(){
+  const g=S.gen; const q=QUESTIONS[g.qIndex];
+  const cur = g.draft[q.key];
+  return `
+  <div class="q-wrap">
+    <div class="q-progress">${QUESTIONS.map((_,i)=>`<i class="${i<=g.qIndex?'on':''}"></i>`).join('')}</div>
+    <div class="q-eyebrow">Frage ${g.qIndex+1} von 5</div>
+    <div class="q-title">${esc(q.q)}</div>
+    <div class="opts">
+      ${q.opts.map(o=>{
+        const val = o.s ? `${o.t} (${o.s})` : o.t;
+        return `<button class="opt ${cur===val?'sel':''}" onclick="pickAnswer('${q.key}', ${JSON.stringify(val).replace(/"/g,'&quot;')})">
+          <div class="t">${esc(o.t)}</div>${o.s?`<div class="s">${esc(o.s)}</div>`:''}
+        </button>`;
+      }).join('')}
+    </div>
+    ${g.qIndex>0?`<div style="margin-top:var(--s4)"><button class="back" style="margin-top:0" onclick="prevQuestion()">← Zurück</button></div>`:''}
+  </div>`;
+}
+function pickAnswer(key,val){
+  S.gen.draft[key]=val;
+  if(S.gen.qIndex < QUESTIONS.length-1){ S.gen.qIndex++; render(); }
+  else generateConcepts();
+}
+function prevQuestion(){ if(S.gen.qIndex>0){S.gen.qIndex--; render();} }
+
+async function generateConcepts(){
+  const g=S.gen;
+  if(!S.pro && !S.account){ openSignup(); render(); return; }
+  if(!S.pro && usageLeft()<=0){ openPaywall(); render(); return; }
+  S.answers = {...g.draft}; await sset('nonna:answers', S.answers);
+  g.step='loadingConcepts'; render();
+  try{
+    const prompt = `Zutaten des Nutzers: ${g.ingredients.join(', ')}
+Antworten des Nutzers:
+${answersText(g.draft)}
+${g.wish?`Zusätzlicher Wunsch des Nutzers: ${g.wish}`:''}
+${g.prevTitles.length?`Diese Konzepte hatte er schon – schlage bewusst ANDERE Richtungen vor: ${g.prevTitles.join('; ')}`:''}
+
+Entwickle daraus 5 unterschiedliche Gerichts-KONZEPTE (noch keine vollen Rezepte). Jedes eigenständig, klares Konzept, jedes überrascht auf andere Weise.
+JSON-Schema (halte dich exakt daran, alles auf Deutsch, sehr kompakt):
+{"konzepte":[{"titel":"...","konzept":"1 knapper Satz, max. 10 Wörter","geschmacksprofil":"1 knapper Satz, max. 10 Wörter, Kern von Balance/Textur/Aroma","dauer":"z.B. 30 Min","schwierigkeit":"Einfach|Mittel|Anspruchsvoll"}]}`;
+    const data = await askClaude(prompt);
+    if(!data.konzepte || !data.konzepte.length) throw new Error('Schema: "konzepte" fehlt');
+    if(!S.pro) await consumeUsage();
+    g.concepts = data.konzepte.slice(0,5);
+    g.prevTitles = [...g.prevTitles, ...g.concepts.map(k=>k.titel)].slice(-15);
+    g.step='concepts'; g.wish='';
+    track('recipe_concepts_generated', {ingredient_count:g.ingredients.length});
+  }catch(e){ S.lastErr = S.lastErr||e.message; g.step='error'; g.retry='generateConcepts()'; }
+  render();
+}
+
+function cookConcepts(){
+  const g=S.gen; const left=usageLeft();
+  return `
+  <button class="back" onclick="restartGen()">← Neue Zutaten</button>
+  <h1 class="screen" style="font-size:28px">Fünf Ideen, frisch für dich ausgedacht</h1>
+  <p class="sub">Tippe ein Konzept an – Nonna schreibt dir dann das volle Rezept.</p>
+  <div class="concept-grid">
+  ${g.concepts.map((k,i)=>`
+    <div class="card concept" onclick="openDetail(${i})">
+      <div class="k-num">Nº ${i+1}</div>
+      <h3>${esc(k.titel)}</h3>
+      <p>${esc(k.konzept)}</p>
+      <div class="taste">${esc(k.geschmacksprofil)}</div>
+      <div class="meta"><span class="tag">⏱ ${esc(k.dauer)}</span><span class="tag w">${esc(k.schwierigkeit)}</span></div>
+    </div>`).join('')}
+  </div>
+  <div class="sec-label">Nichts dabei?</div>
+  <textarea class="field" id="wishInput" rows="2" placeholder="Konkretisiere deine Wünsche – z. B. „bitte vegetarisch“ oder „was mit Ofen“"></textarea>
+  <div class="row" style="margin-top:var(--s3)">
+    <button class="btn ghost" onclick="regenerate()">Neue Vorschläge</button>
+    <button class="btn" onclick="regenerateWithWish()">Mit Wunsch</button>
+  </div>
+  <p class="usage-note">${S.pro?'★ Famiglia aktiv – so viele Runden, wie du willst.':`Jede neue Runde zählt: noch ${left} von ${FREE_LIMIT} diese Woche`}</p>`;
+}
+function restartGen(){ S.gen={step:'input',ingredients:S.gen.ingredients,qIndex:0,draft:{},concepts:[],detail:null,wish:'',prevTitles:[],retry:null}; render(); }
+function regenerate(){ S.gen.wish=''; generateConcepts(); }
+function regenerateWithWish(){ const w=el('wishInput'); S.gen.wish = w?w.value.trim():''; generateConcepts(); }
+function backToConcepts(){ S.gen.step='concepts'; render(); }
+
+async function openDetail(i){
+  const g=S.gen; const k=g.concepts[i];
+  g.step='loadingDetail'; render();
+  try{
+    const prompt = `Der Nutzer hat dieses Konzept gewählt und will jetzt das vollständige Rezept.
+Konzept: ${k.titel} – ${k.konzept} (${k.dauer}, ${k.schwierigkeit})
+Zutaten des Nutzers: ${g.ingredients.join(', ')}
+Antworten des Nutzers:
+${answersText(S.answers)}
+
+Arbeite NUR dieses eine Rezept vollständig aus. Kompakt: max. 7 Schritte, jeder Schritt max. 2 Sätze.
+JSON-Schema (exakt, Deutsch):
+{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1-2 Sätze","zutaten":[{"menge":"200","einheit":"g","name":"..."}],"schritte":["..."],"anrichten":"1-2 Sätze","geschmacksprofil":"1-2 Sätze"}`;
+    const data = await askClaude(prompt, SYSTEM_CHEF, 1600);
+    if(!data.titel || !data.schritte) throw new Error('Schema: Rezeptfelder fehlen');
+    g.detail = data; g.step='detail';
+    track('recipe_detail_opened', {titel:data.titel});
+  }catch(e){ S.lastErr = S.lastErr||e.message; g.step='error'; g.retry=`openDetail(${i})`; }
+  render();
+}
+
+/* Rezept-Detailansicht */
+function recipeHTML(r, backFn){
+  return `
+  <button class="back" onclick="${backFn}">← Zurück</button>
+  <div class="r-head">
+    <h1 class="screen" style="font-size:27px">${esc(r.titel)}</h1>
+  </div>
+  <p class="sub" style="margin-bottom:var(--s4)">${esc(r.konzept||'')}</p>
+  ${r.zutatenanalyse?`<div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">${esc(r.zutatenanalyse)}</div></div>`:''}
+  <div class="sec-label" style="margin-top:0">Zutaten</div>
+  <div class="card" style="padding:var(--s2) var(--s5);margin-bottom:0">
+    ${(r.zutaten||[]).map(z=>`<div class="zutat"><span>${esc(z.name)}</span><span class="m">${esc(z.menge)} ${esc(z.einheit||'')}</span></div>`).join('')}
+  </div>
+  <div class="row" style="margin-top:var(--s2);margin-bottom:var(--s3)">
+    <button class="btn ghost" style="font-size:13px;padding:10px" onclick="downloadRecipeIngredients()">⬇︎ Zutaten herunterladen</button>
+    <button class="btn ghost" style="font-size:13px;padding:10px" onclick="shareRecipeIngredients()">↗ Teilen</button>
+  </div>
+  <div class="sec-label">Zubereitung</div>
+  ${(r.schritte||[]).map((s,i)=>`<div class="step"><div class="n">${i+1}</div><p>${esc(s)}</p></div>`).join('')}
+  ${r.anrichten?`<div class="sec-label">Anrichten</div><div class="card"><p style="font-size:14.5px;line-height:1.55">${esc(r.anrichten)}</p></div>`:''}
+  ${r.geschmacksprofil?`<div class="sec-label">Warum es schmeckt</div><p style="font-size:14.5px;line-height:1.55;color:var(--muted)">${esc(r.geschmacksprofil)}</p>`:''}
+  <div style="height:var(--s5)"></div>`;
+}
+function getCurrentRecipe(){
+  if(S.tab==='cook') return S.gen.detail;
+  if(S.tab==='fav') return S.fav.open;
+  if(S.tab==='meal') return S.mp.detail;
+  return null;
+}
+function recipeIngredientsText(r){
+  if(!r) return '';
+  let t = `${r.titel}\n\n`;
+  (r.zutaten||[]).forEach(z=> t += `– ${z.menge?z.menge+' ':''}${z.einheit?z.einheit+' ':''}${z.name}\n`);
+  return t.trim()+'\n';
+}
+function safeFilename(s){ return (s||'rezept').toLowerCase().replace(/[^a-z0-9äöüß]+/g,'-').replace(/(^-|-$)/g,'')||'rezept'; }
+function downloadRecipeIngredients(){
+  const r=getCurrentRecipe(); if(!r) return;
+  downloadText(`nonna-${safeFilename(r.titel)}.txt`, recipeIngredientsText(r));
+}
+function shareRecipeIngredients(){
+  const r=getCurrentRecipe(); if(!r) return;
+  shareOrDownloadText(`Zutaten: ${r.titel}`, recipeIngredientsText(r), `nonna-${safeFilename(r.titel)}.txt`);
+}
+async function toggleFav(){
+  const r = S.tab==='cook' ? S.gen.detail : (S.tab==='fav' ? S.fav.open : S.mp.detail);
+  if(!r) return;
+  const idx = S.favs.findIndex(f=>f.titel===r.titel);
+  const wasFav = idx>=0;
+  if(wasFav) S.favs.splice(idx,1); else S.favs.unshift({...r, savedAt:Date.now()});
+  await sset('nonna:favorites', S.favs);
+  track(wasFav?'favorite_removed':'favorite_added', {titel:r.titel});
+  render();
+}
+
+/* ============ STRANG 2: FAVORITEN ============ */
+function viewFav(){
+  if(!S.pro) return lockedView('Deine Lieblinge','Was dir schmeckt, wandert ins Regal – und ist jederzeit offline wieder da. Deine persönliche Rezeptsammlung gehört zur Famiglia.');
+  if(S.fav.view==='detail' && S.fav.open) return recipeHTML(S.fav.open,'closeFavDetail()');
+  if(!S.favs.length) return `
+    <h1 class="screen">Deine Lieblinge</h1>
+    <div class="empty"><div class="e">🍝</div><b>Noch nichts probiert?</b>Ab in die Küche – was dir schmeckt, landet hier.</div>
+    <button class="btn" onclick="goTab('cook')">Zum Rezeptgenerator</button>`;
+  return `
+  <h1 class="screen">Deine Lieblinge</h1>
+  <p class="sub">Was dir schmeckt – jederzeit offline aus dem Regal.</p>
+  <div class="concept-grid">
+  ${S.favs.map((f,i)=>`
+    <div class="card concept" onclick="openFavDetail(${i})">
+      <h3>${esc(f.titel)}</h3>
+      <p>${esc(f.konzept||'')}</p>
+      <div class="meta"><span class="tag">${(f.zutaten||[]).length} Zutaten</span><span class="tag w">${(f.schritte||[]).length} Schritte</span></div>
+    </div>`).join('')}
+  </div>`;
+}
+function openFavDetail(i){ S.fav.open=S.favs[i]; S.fav.view='detail'; render(); }
+function closeFavDetail(){ S.fav.view='list'; S.fav.open=null; render(); }
+
+/* ============ STRANG 3: MEAL-PREP (PRO) ============ */
+function viewMeal(){
+  if(!S.pro) return lockedView('Nonnas Wochenplan','Einmal vorbereiten, die ganze Woche gut essen. Nonna plant aus deinen Vorräten Prep-Session und Wochenkalender.');
+  const m=S.mp;
+  if(m.step==='loading') return loaderHTML('meal');
+  if(m.step==='detailLoading') return loaderHTML('detail');
+  if(m.step==='detail' && m.detail) return recipeHTML(m.detail,'closeMealDetail()');
+  if(m.step==='error') return errHTML('generateMealplan()');
+  if(S.mealplan) return mealPlanView();
+  return mealInputView();
+}
+function lockedView(title, text){
+  return `
+  <h1 class="screen">${title}</h1>
+  <div class="locked card" style="min-height:280px">
+    <div style="filter:blur(3px);opacity:.6">
+      <div class="day-card"><h3>Tag 1</h3><div class="meal"><span class="slot">Mittag</span><div><b>Sesam-Bowl</b><p>Mit knackigem Gemüse</p></div></div><div class="meal"><span class="slot">Abend</span><div><b>Ofen-Frittata</b><p>Resteverwertung deluxe</p></div></div></div>
+      <div class="day-card" style="margin-top:var(--s3)"><h3>Tag 2</h3><div class="meal"><span class="slot">Mittag</span><div><b>Linsen-Curry</b><p>Aus der Prep-Session</p></div></div></div>
+    </div>
+    <div class="lock-cover">
+      <span class="badge">★ Famiglia-Funktion</span>
+      <p style="font-size:14px;line-height:1.5">${text}</p>
+      <button class="btn warm" style="max-width:280px" onclick="openPaywall()">Famiglia werden</button>
+    </div>
+  </div>`;
+}
+function mealInputView(){
+  const m=S.mp;
+  if(!m.startDate){ const d=new Date(); d.setDate(d.getDate()+1); m.startDate=isoDate(d); }
+  return `
+  <h1 class="screen">Nonnas Wochenplan</h1>
+  <div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">Sag mir, was im Haus ist – ich plane dir Prep-Session und Woche.</div></div>
+  <div class="sec-label" style="margin-top:0">Was ist im Haus?</div>
+  <textarea class="field" id="mpIng" rows="3" placeholder="z. B. Reis, Linsen, Karotten, Hähnchen, Joghurt …">${esc(m.ingredients)}</textarea>
+  <div class="sec-label">Ab welchem Tag?</div>
+  <input class="field" id="mpStart" type="date" value="${m.startDate}">
+  <div class="sec-label">Wie viele Tage? (1–14)</div>
+  <input class="field" id="mpDays" type="number" min="1" max="14" value="${m.days}">
+  <div class="preset-row">
+    ${[3,5,7,10].map(d=>`<button class="chip-btn" onclick="setMpDays(${d})">${d} Tage</button>`).join('')}
+  </div>
+  <div class="sec-label">Mahlzeiten pro Tag</div>
+  <div class="seg">${[1,2,3].map(x=>`<button class="${m.meals===x?'on':''}" onclick="setMpMeals(${x})">${x}</button>`).join('')}</div>
+  <button class="btn" onclick="generateMealplan()">Plan erstellen</button>
+  <p class="usage-note">Lange Zeiträume plant Nonna in mehreren Etappen – das dauert entsprechend länger.</p>`;
+}
+function isoDate(d){ return d.toISOString().slice(0,10); }
+function setMpDays(d){ keepMpInput(); S.mp.days=d; render(); }
+function setMpMeals(x){ keepMpInput(); S.mp.meals=x; render(); }
+function keepMpInput(){
+  const i=el('mpIng'); if(i) S.mp.ingredients=i.value;
+  const d=el('mpDays'); if(d){ const v=parseInt(d.value,10); if(!isNaN(v)) S.mp.days=Math.min(14,Math.max(1,v)); }
+  const s=el('mpStart'); if(s && s.value) S.mp.startDate=s.value;
+}
+
+async function generateMealplan(){
+  keepMpInput();
+  const m=S.mp;
+  if(!m.ingredients.trim()){ render(); return; }
+  m.step='loading'; render();
+  try{
+    /* Chunking: max ~15 Mahlzeiten-Slots pro API-Call */
+    const chunkDays = Math.max(1, Math.floor(15/m.meals));
+    const chunks=[];
+    for(let start=1; start<=m.days; start+=chunkDays){
+      chunks.push([start, Math.min(m.days, start+chunkDays-1)]);
+    }
+    let prepSession=[], plan=[];
+    for(let ci=0; ci<chunks.length; ci++){
+      const [von,bis]=chunks[ci];
+      const p=el('phrase'); if(p){ p.dataset.lock='1'; p.textContent=`Tag ${von}–${bis} wird geplant … (${ci+1}/${chunks.length})`; }
+      const prompt = `Erstelle einen Teil eines Meal-Prep-Plans.
+Vorhandene Zutaten: ${m.ingredients}
+Gesamtzeitraum: ${m.days} Tage mit je ${m.meals} Mahlzeit(en). Plane JETZT NUR Tag ${von} bis Tag ${bis} (Feld "tag" mit diesen absoluten Tagesnummern).
+${ci>0?`Bereits geplante Gerichte (nicht wiederholen): ${plan.map(x=>x.titel).join('; ')}`:''}
+${S.answers?`Kontext zum Nutzer:\n${answersText(S.answers)}`:''}
+${ci===0?`Erstelle zusätzlich eine gebündelte Prep-Session für den GESAMTEN Zeitraum (was wird einmal vorbereitet und mehrfach verwendet).`:'Feld "prepSession" als leeres Array zurückgeben.'}
+Sehr kompakt. JSON-Schema (exakt, Deutsch):
+{"prepSession":["max 5 kurze Punkte"],"plan":[{"tag":${von},"mahlzeit":"Frühstück|Mittag|Abend","titel":"...","kurzbeschreibung":"max 1 Satz","prepHinweis":"max 5 Wörter"}]}`;
+      const data = await askClaude(prompt, SYSTEM_CHEF, 2000);
+      if(!data.plan) throw new Error('Schema: "plan" fehlt (Etappe '+(ci+1)+')');
+      if(ci===0) prepSession = data.prepSession||[];
+      plan = plan.concat(data.plan);
+    }
+    S.mealplan = {createdAt:Date.now(), startDate:m.startDate, days:m.days, prepSession, plan};
+    await sset('nonna:mealplan', S.mealplan);
+    m.step='idle'; m.view='plan'; m.calMonth=null;
+    track('mealplan_generated', {days:m.days, meals_per_day:m.meals});
+  }catch(e){ S.lastErr = S.lastErr||e.message; m.step='error'; }
+  render();
+}
+function mealPlanView(){
+  const p=S.mealplan; const m=S.mp;
+  return `
+  <h1 class="screen">Nonnas Wochenplan</h1>
+  <p class="sub">Einmal geplant – jetzt nur noch nachkochen.</p>
+  <div class="seg">
+    <button class="${m.view==='plan'?'on':''}" onclick="setMpView('plan')">Plan</button>
+    <button class="${m.view==='cal'?'on':''}" onclick="setMpView('cal')">Kalender</button>
+  </div>
+  ${m.view==='cal' ? calGridHTML(p) : planListHTML(p)}
+  <div class="row" style="margin-top:var(--s4)">
+    <button class="btn ghost" onclick="downloadMealplan()">⬇︎ Liste herunterladen</button>
+    <button class="btn ghost" onclick="shareMealplan()">↗ Teilen</button>
+  </div>
+  <div class="row" style="margin-top:var(--s2)">
+    <button class="btn ghost" onclick="exportICS()">📅 In meinen Kalender (.ics)</button>
+    <button class="btn ghost" onclick="resetMealplan()">Neu planen</button>
+  </div>
+  <p class="usage-note">Die .ics-Datei lässt sich in Google Kalender, Apple Kalender & Co. importieren.</p>`;
+}
+function mealplanText(p){
+  let t = 'Nonna Meal-Prep-Plan\n\n';
+  if((p.prepSession||[]).length){
+    t += 'Prep-Session:\n';
+    p.prepSession.forEach(s=> t += `– ${s}\n`);
+    t += '\n';
+  }
+  const byDay = {};
+  p.plan.forEach(x=>{ (byDay[x.tag]=byDay[x.tag]||[]).push(x); });
+  Object.keys(byDay).sort((a,b)=>a-b).forEach(d=>{
+    const label = dayFor(p,+d).toLocaleDateString('de-DE',{weekday:'long', day:'numeric', month:'long'});
+    t += `${label}\n`;
+    byDay[d].forEach(mm=> t += `  ${mm.mahlzeit}: ${mm.titel}${mm.kurzbeschreibung?' – '+mm.kurzbeschreibung:''}\n`);
+    t += '\n';
+  });
+  return t.trim()+'\n';
+}
+function downloadMealplan(){ downloadText('nonna-essensplan.txt', mealplanText(S.mealplan)); }
+function shareMealplan(){ shareOrDownloadText('Nonna Meal-Prep-Plan', mealplanText(S.mealplan), 'nonna-essensplan.txt'); }
+function setMpView(v){ S.mp.view=v; render(); }
+function planListHTML(p){
+  const byDay = {};
+  p.plan.forEach((x,i)=>{ (byDay[x.tag]=byDay[x.tag]||[]).push({...x,_i:i}); });
+  return `
+  <div class="prep-box">
+    <div class="sec-label" style="margin-top:0">🧺 Prep-Session</div>
+    <ul>${(p.prepSession||[]).map(s=>`<li>${esc(s)}</li>`).join('')}</ul>
+  </div>
+  <div class="day-grid">
+  ${Object.keys(byDay).sort((a,b)=>a-b).map(d=>{
+    const label = new Date(dayFor(p,+d)).toLocaleDateString('de-DE',{weekday:'short', day:'numeric', month:'short'});
+    return `
+    <div class="card day-card">
+      <h3>${esc(label)}</h3>
+      ${byDay[d].map(mm=>`
+        <div class="meal" onclick="openMealDetail(${mm._i})">
+          <span class="slot">${esc(mm.mahlzeit)}</span>
+          <div style="flex:1"><b>${esc(mm.titel)}</b><p>${esc(mm.kurzbeschreibung||'')}${mm.prepHinweis?' · '+esc(mm.prepHinweis):''}</p></div>
+          <button class="del" onclick="event.stopPropagation();deleteMeal(${mm._i})" aria-label="Löschen">✕</button>
+        </div>`).join('')}
+    </div>`;}).join('')}
+  </div>`;
+}
+function calGridHTML(p){
+  const m=S.mp;
+  const byDate = {};
+  p.plan.forEach((x,i)=>{ const iso=isoDate(dayFor(p,x.tag)); (byDate[iso]=byDate[iso]||[]).push({...x,_i:i}); });
+
+  /* Monat bestimmen: Standard = Monat des Planstarts */
+  if(!m.calMonth){
+    const base = p.startDate ? new Date(p.startDate+'T00:00:00') : new Date();
+    m.calMonth = base.getFullYear()+'-'+String(base.getMonth()+1).padStart(2,'0');
+  }
+  const [Y,M] = m.calMonth.split('-').map(Number);
+  const first = new Date(Y, M-1, 1);
+  const monthName = first.toLocaleDateString('de-DE',{month:'long', year:'numeric'});
+  const startOffset = (first.getDay()+6)%7; // Montag=0
+  const daysInMonth = new Date(Y, M, 0).getDate();
+  const weekdays=['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const todayIso = isoDate(new Date());
+
+  let cells='';
+  for(let i=0;i<startOffset;i++) cells+=`<div class="mcell empty"></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const iso = `${Y}-${String(M).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const meals = byDate[iso]||[];
+    const isToday = iso===todayIso;
+    const sel = m.calSelected===iso;
+    cells += `<div class="mcell ${meals.length?'has':''} ${isToday?'today':''} ${sel?'sel':''}" onclick="selectCalDay('${iso}')">
+      <span class="dnum">${d}</span>
+      ${meals.length?`<span class="ddots">${meals.slice(0,3).map(()=>'●').join('')}</span>`:''}
+    </div>`;
+  }
+
+  const selMeals = m.calSelected ? (byDate[m.calSelected]||[]) : [];
+  return `
+  <div class="cal-nav">
+    <button class="cal-arrow" onclick="shiftCalMonth(-1)" aria-label="Vorheriger Monat">←</button>
+    <b>${monthName}</b>
+    <button class="cal-arrow" onclick="shiftCalMonth(1)" aria-label="Nächster Monat">→</button>
+  </div>
+  <div class="cal-weekdays">${weekdays.map(w=>`<span>${w}</span>`).join('')}</div>
+  <div class="cal-month">${cells}</div>
+  ${m.calSelected?`
+    <div class="sec-label">${new Date(m.calSelected+'T00:00:00').toLocaleDateString('de-DE',{weekday:'long', day:'numeric', month:'long'})}</div>
+    ${selMeals.length ? selMeals.map(mm=>`
+      <div class="meal" onclick="openMealDetail(${mm._i})">
+        <span class="slot">${esc(mm.mahlzeit)}</span>
+        <div style="flex:1"><b>${esc(mm.titel)}</b><p>${esc(mm.kurzbeschreibung||'')}</p></div>
+      </div>`).join('') : `<p class="sub">Nichts geplant an diesem Tag.</p>`}
+  `:''}`;
+}
+function selectCalDay(iso){ S.mp.calSelected = (S.mp.calSelected===iso)?null:iso; render(); }
+function shiftCalMonth(dir){
+  const [Y,M]=S.mp.calMonth.split('-').map(Number);
+  const d=new Date(Y,M-1+dir,1);
+  S.mp.calMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  render();
+}
+function dayFor(plan, tag){
+  const base = plan.startDate ? new Date(plan.startDate+'T00:00:00') : (()=>{const d=new Date();d.setDate(d.getDate()+1);d.setHours(0,0,0,0);return d;})();
+  const d=new Date(base); d.setDate(base.getDate()+((tag||1)-1)); return d;
+}
+function exportICS(){
+  const p=S.mealplan; if(!p||!p.plan.length) return;
+  const pad=n=>String(n).padStart(2,'0');
+  const fmt=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  const clean=s=>String(s||'').replace(/[\r\n,;]/g,' ');
+  let ev='';
+  p.plan.forEach((m,i)=>{
+    const d=dayFor(p, m.tag);
+    const t=(m.mahlzeit||'').toLowerCase();
+    let h=12,mi=0;
+    if(t.includes('früh')) h=8;
+    else if(t.includes('mittag')){h=12;mi=30;}
+    else if(t.includes('abend')) h=19;
+    d.setHours(h,mi,0,0);
+    const e=new Date(d.getTime()+45*60000);
+    ev+=`BEGIN:VEVENT\r\nUID:nonna-${Date.now()}-${i}@nonna.app\r\nDTSTAMP:${fmt(new Date())}\r\nDTSTART:${fmt(d)}\r\nDTEND:${fmt(e)}\r\nSUMMARY:${clean(m.mahlzeit)}: ${clean(m.titel)}\r\nDESCRIPTION:${clean(m.kurzbeschreibung)}\r\nEND:VEVENT\r\n`;
+  });
+  const ics=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Nonna//Essensplan//DE\r\n${ev}END:VCALENDAR\r\n`;
+  const blob=new Blob([ics],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='nonna-essensplan.ics';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+async function deleteMeal(i){ S.mealplan.plan.splice(i,1); await sset('nonna:mealplan',S.mealplan); render(); }
+async function resetMealplan(){ S.mealplan=null; await sset('nonna:mealplan',null); S.mp.step='idle'; S.mp.calMonth=null; S.mp.calSelected=null; render(); }
+async function openMealDetail(i){
+  const m = S.mealplan.plan[i];
+  S.mp.step='detailLoading'; render();
+  try{
+    const prompt = `Arbeite dieses Meal-Prep-Gericht als vollständiges, kompaktes Rezept aus (max. 6 Schritte, je max. 2 Sätze).
+Gericht: ${m.titel} – ${m.kurzbeschreibung||''} (Slot: ${m.mahlzeit}, Prep-Hinweis: ${m.prepHinweis||'-'})
+Verfügbare Zutaten: ${S.mp.ingredients||'wie im Plan'}
+${S.answers?`Kontext zum Nutzer:\n${answersText(S.answers)}`:''}
+JSON-Schema (exakt, Deutsch):
+{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1 Satz","zutaten":[{"menge":"...","einheit":"...","name":"..."}],"schritte":["..."],"anrichten":"1 Satz","geschmacksprofil":"1 Satz"}`;
+    const data = await askClaude(prompt, SYSTEM_CHEF, 1600);
+    if(!data.titel) throw new Error('Schema: Rezeptfelder fehlen');
+    S.mp.detail = data; S.mp.step='detail';
+  }catch(e){ S.lastErr = S.lastErr||e.message; S.mp.step='error'; }
+  render();
+}
+function closeMealDetail(){ S.mp.step='idle'; S.mp.detail=null; render(); }
+
+/* ============ STRANG 4: KOCHSCHULE (PRO) ============ */
+function viewSchool(){
+  if(!S.pro) return lockedView('Nonnas Kochschule','Lernen wie bei Duolingo, essen wie bei Nonna. Acht Lektionen asiatische Küche – am Ende jeder Lektion steht ein echtes Gericht.');
+  const sc=S.sc;
+  if(sc.view==='loading') return loaderHTML('lesson');
+  if(sc.view==='error') return errHTML(`openLesson(${sc.lessonIdx})`);
+  if(sc.view==='lesson') return lessonView();
+  return pathView();
+}
+function pathView(){
+  const done = S.school.completed.length;
+  const pct = Math.round(done/LESSONS.length*100);
+  return `
+  <h1 class="screen">Nonnas Kochschule</h1>
+  <div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">Heute kocht Nonna über den Tellerrand: asiatische Küche, Schritt für Schritt. Weitere Küchen? Kommen bald.</div></div>
+  <div class="sec-label" style="margin-top:0">Wie viel trau'n wir uns zu, Schatz?</div>
+  <div class="seg">
+    <button class="${S.sc.level==='anfaenger'?'on':''}" onclick="setSchoolLevel('anfaenger')">Anfänger</button>
+    <button class="${S.sc.level==='mittel'?'on':''}" onclick="setSchoolLevel('mittel')">Mittelmaß</button>
+    <button class="${S.sc.level==='profi'?'on':''}" onclick="setSchoolLevel('profi')">Profi</button>
+  </div>
+  <div class="progress-head">
+    <div style="flex:1"><b>🥢 Asiatische Küche</b><div class="pbar"><i style="width:${pct}%"></i></div></div>
+    <span class="tag w" style="margin-left:var(--s3)">${done}/${LESSONS.length}</span>
+  </div>
+  <div class="card" style="cursor:pointer" onclick="toggleSchoolShopping()">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div><b style="font-family:var(--display);font-size:15px">🧺 Was du wann brauchst</b><p class="sub" style="margin:2px 0 0;font-size:13px">Jede Lektion einzeln – frisch einkaufen, wenn sie dran ist</p></div>
+      <span style="font-size:18px;color:var(--blue-500)">${S.sc.showShopping?'▲':'▼'}</span>
+    </div>
+    ${S.sc.showShopping?`
+      <div style="margin-top:var(--s4)">
+        ${schoolIngredientsByLesson().map(l=>`
+          <div style="margin-bottom:var(--s3)">
+            <div style="font-size:12.5px;font-weight:700;color:var(--blue-500);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Lektion ${l.idx+1} · ${esc(l.titel)}</div>
+            <div class="chips" style="margin:0">${l.zutaten.map(z=>`<span class="chip">${esc(z)}</span>`).join('')}</div>
+          </div>`).join('')}
+      </div>
+      <div class="row" style="margin-top:var(--s2)" onclick="event.stopPropagation()">
+        <button class="btn ghost" onclick="downloadSchoolList()">⬇︎ Herunterladen</button>
+        <button class="btn ghost" onclick="shareSchoolList()">↗ Teilen</button>
+      </div>
+    `:''}
+  </div>
+  <div class="path">
+    ${LESSONS.map((l,i)=>{
+      const isDone = S.school.completed.includes(i);
+      const isNext = !isDone && i===done;
+      const locked = !isDone && !isNext;
+      return `<div class="node ${isDone?'done':isNext?'next':'lock'} ${locked?'':'tappable'}" ${locked?'':`onclick="openLesson(${i})"`}>
+        <div class="dot">${isDone?'✓':locked?'🔒':l.icon}</div>
+        <div class="info"><b>Lektion ${i+1}: ${l.t}</b><span>${l.d}</span></div>
+      </div>`;
+    }).join('')}
+  </div>
+  <div class="sec-label">Bald verfügbar</div>
+  <div class="row">
+    <div class="card" style="flex:1;text-align:center;opacity:.55;margin-bottom:0"><b style="font-family:var(--display)">🇮🇹 Italienisch</b></div>
+    <div class="card" style="flex:1;text-align:center;opacity:.55;margin-bottom:0"><b style="font-family:var(--display)">🇫🇷 Französisch</b></div>
+  </div>`;
+}
+function schoolListText(){
+  let t = 'Nonna Kochschule – Zutaten pro Lektion\n\n';
+  schoolIngredientsByLesson().forEach(l=>{
+    t += `Lektion ${l.idx+1} · ${l.titel}\n`;
+    l.zutaten.forEach(z=> t += `– ${z}\n`);
+    t += '\n';
+  });
+  return t.trim()+'\n';
+}
+function downloadSchoolList(){ downloadText('nonna-kochschule-zutaten.txt', schoolListText()); }
+function shareSchoolList(){ shareOrDownloadText('Nonna Kochschule – Zutaten', schoolListText(), 'nonna-kochschule-zutaten.txt'); }
+function toggleSchoolShopping(){ S.sc.showShopping = !S.sc.showShopping; render(); }
+function openLesson(i){
+  S.sc.lessonIdx=i; S.sc.phase='intro'; S.sc.quizIdx=0; S.sc.quizAnswered=null; S.sc.correct=0;
+  S.sc.lesson = LESSON_CONTENT[S.sc.level][i];
+  S.sc.view='lesson';
+  render();
+}
+async function setSchoolLevel(lvl){
+  S.sc.level = lvl;
+  await sset('nonna:schoolLevel', lvl);
+  render();
+}
+function lessonView(){
+  const sc=S.sc; const l=sc.lesson; const meta=LESSONS[sc.lessonIdx];
+  if(sc.phase==='intro') return `
+    <button class="back" onclick="closeLesson()">← Lernpfad</button>
+    <div class="q-eyebrow" style="margin-top:var(--s4)">Lektion ${sc.lessonIdx+1} · ${sc.level==='anfaenger'?'Anfänger':sc.level==='profi'?'Profi':'Mittelmaß'}</div>
+    <h1 class="screen" style="font-size:28px;margin-top:0">${meta.icon} ${esc(meta.t)}</h1>
+    <p class="sub">${esc(l.intro)}</p>
+    <div class="sec-label" style="margin-top:0">Das lernst du</div>
+    <div class="card"><ul style="margin-left:18px">${(l.lernziele||[]).map(z=>`<li style="font-size:14.5px;line-height:1.6">${esc(z)}</li>`).join('')}</ul></div>
+    <button class="btn" style="margin-top:var(--s4)" onclick="startQuiz()">Quiz starten</button>`;
+  if(sc.phase==='quiz'){
+    const q=l.quiz[sc.quizIdx];
+    return `
+    <button class="back" onclick="closeLesson()">← Lernpfad</button>
+    <div class="q-wrap" style="min-height:auto;margin-top:var(--s4)">
+      <div class="q-eyebrow">Frage ${sc.quizIdx+1} von ${l.quiz.length}</div>
+      <div class="q-title" style="font-size:24px">${esc(q.frage)}</div>
+      <div class="opts">
+        ${q.optionen.map((o,oi)=>{
+          let cls='opt quiz-opt';
+          if(sc.quizAnswered!==null){
+            if(oi===q.richtig) cls+=' right';
+            else if(oi===sc.quizAnswered) cls+=' wrong';
+          }
+          return `<button class="${cls}" ${sc.quizAnswered!==null?'':`onclick="answerQuiz(${oi})"`}><div class="t">${esc(o)}</div></button>`;
+        }).join('')}
+      </div>
+      ${sc.quizAnswered!==null?`
+        <div class="feedback ${sc.quizAnswered===q.richtig?'ok':'no'}">${sc.quizAnswered===q.richtig?'Genau so! 👌':'Fast – merk dir die grüne Antwort.'}</div>
+        <button class="btn" onclick="nextQuiz()">${sc.quizIdx<l.quiz.length-1?'Nächste Frage':'Zum Praxisrezept 🍳'}</button>`:''}
+    </div>`;
+  }
+  if(sc.phase==='recipe'){
+    const r=l.praxisrezept;
+    return `
+    <button class="back" onclick="closeLesson()">← Lernpfad</button>
+    <div class="q-eyebrow" style="margin-top:var(--s4)">Praxis · ${sc.correct}/${l.quiz.length} im Quiz</div>
+    ${recipeCore(r)}
+    <button class="btn warm" onclick="completeLesson()">Lektion abschließen ✓</button>
+    <div style="height:var(--s5)"></div>`;
+  }
+  return '';
+}
+function downloadLessonIngredients(){
+  const r=S.sc.lesson?.praxisrezept; if(!r) return;
+  downloadText(`nonna-${safeFilename(r.titel)}.txt`, recipeIngredientsText(r));
+}
+function shareLessonIngredients(){
+  const r=S.sc.lesson?.praxisrezept; if(!r) return;
+  shareOrDownloadText(`Zutaten: ${r.titel}`, recipeIngredientsText(r), `nonna-${safeFilename(r.titel)}.txt`);
+}
+function recipeCore(r){
+  return `
+  <h1 class="screen" style="font-size:26px;margin-top:0">${esc(r.titel)}</h1>
+  <p class="sub" style="margin-bottom:var(--s4)">${esc(r.konzept||'')}</p>
+  <div class="sec-label" style="margin-top:0">Zutaten</div>
+  <div class="card" style="padding:var(--s2) var(--s5);margin-bottom:0">
+    ${(r.zutaten||[]).map(z=>`<div class="zutat"><span>${esc(z.name)}</span><span class="m">${esc(z.menge)} ${esc(z.einheit||'')}</span></div>`).join('')}
+  </div>
+  <div class="row" style="margin-top:var(--s2);margin-bottom:var(--s3)">
+    <button class="btn ghost" style="font-size:13px;padding:10px" onclick="downloadLessonIngredients()">⬇︎ Zutaten herunterladen</button>
+    <button class="btn ghost" style="font-size:13px;padding:10px" onclick="shareLessonIngredients()">↗ Teilen</button>
+  </div>
+  <div class="sec-label">Zubereitung</div>
+  ${(r.schritte||[]).map((s,i)=>`<div class="step"><div class="n">${i+1}</div><p>${esc(s)}</p></div>`).join('')}
+  ${r.anrichten?`<div class="sec-label">Anrichten</div><div class="card" style="margin-bottom:var(--s4)"><p style="font-size:14.5px;line-height:1.55">${esc(r.anrichten)}</p></div>`:''}`;
+}
+function startQuiz(){ S.sc.phase='quiz'; S.sc.quizIdx=0; S.sc.quizAnswered=null; S.sc.correct=0; render(); }
+function answerQuiz(oi){
+  const q=S.sc.lesson.quiz[S.sc.quizIdx];
+  S.sc.quizAnswered=oi;
+  if(oi===q.richtig) S.sc.correct++;
+  render();
+}
+function nextQuiz(){
+  if(S.sc.quizIdx < S.sc.lesson.quiz.length-1){ S.sc.quizIdx++; S.sc.quizAnswered=null; }
+  else S.sc.phase='recipe';
+  render();
+}
+async function completeLesson(){
+  if(!S.school.completed.includes(S.sc.lessonIdx)){
+    S.school.completed.push(S.sc.lessonIdx);
+    await sset('nonna:school', S.school);
+  }
+  track('lesson_completed', {lesson_index:S.sc.lessonIdx, level:S.sc.level});
+  S.sc.view='path'; render();
+}
+function closeLesson(){ S.sc.view='path'; render(); }
+
+/* ============ PAYWALL & PROFIL ============ */
+function openSignup(){
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="sheet">
+      <h2>Sag Nonna, wer du bist.</h2>
+      <p class="sub" style="margin-bottom:var(--s4)">Kostenlos – und du bekommst 2 Rezeptrunden pro Woche von Nonna.</p>
+      <div class="stack">
+        <input class="field" id="suName" type="text" placeholder="Dein Name" autocomplete="off">
+        <input class="field" id="suMail" type="email" placeholder="Deine E-Mail" autocomplete="off">
+        <button class="btn" onclick="submitSignup()">Kostenlos anmelden</button>
+        <button class="btn ghost" onclick="closeModal()">Später</button>
+      </div>
+      <p class="usage-note" id="suErr" style="color:var(--bad)"></p>
+      <p class="usage-note">Demo: keine echte Registrierung, kein Passwort – die Daten bleiben nur in dieser App.</p>
+    </div>
+  </div>`;
+}
+async function submitSignup(){
+  const name=(el('suName')?.value||'').trim();
+  const mail=(el('suMail')?.value||'').trim();
+  if(!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)){
+    const e=el('suErr'); if(e) e.textContent='Bitte Name und eine gültige E-Mail angeben.';
+    return;
+  }
+  S.account={name, mail, createdAt:Date.now()};
+  await sset('nonna:account', S.account);
+  track('signup_completed');
+  closeModal();
+  /* Zutaten & Antworten liegen noch im State – direkt weiter zur Generierung */
+  if(S.gen.draft && Object.keys(S.gen.draft).length===QUESTIONS.length) generateConcepts();
+  else render();
+}
+async function logoutAccount(){ S.account=null; await sset('nonna:account',null); openProfile(); render(); }
+
+function openPaywall(){
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="sheet">
+      <h2 style="font-family:var(--serif);font-style:italic">Werde Teil der Famiglia.</h2>
+      <p class="sub" style="margin-bottom:var(--s2)">Für alle, die öfter als zweimal die Woche gut essen wollen.</p>
+      <div class="benefit"><div class="ic">🍳</div><div><b>Unbegrenzte Rezeptrunden</b><p>So oft du willst – kein Wochenlimit mehr.</p></div></div>
+      <div class="benefit"><div class="ic">❤️</div><div><b>Deine Lieblinge</b><p>Gespeichert und jederzeit offline abrufbar.</p></div></div>
+      <div class="benefit"><div class="ic">🗓️</div><div><b>Meal-Prep-Planner</b><p>Prep-Session, Wochenkalender und Kalender-Export.</p></div></div>
+      <div class="benefit"><div class="ic">🎓</div><div><b>Kochschule</b><p>Techniken lernen wie bei Duolingo – mit echtem Essen am Ende.</p></div></div>
+      <div class="price">4,99 € <small>/ Monat · jederzeit kündbar</small></div>
+      <div class="stack">
+        <button class="btn warm" onclick="openPaymentForm()">Famiglia werden</button>
+        <button class="btn ghost" onclick="closeModal()">Später</button>
+      </div>
+      <p class="usage-note">Demo: Es findet kein echter Kauf statt.</p>
+    </div>
+  </div>`;
+}
+function openPaymentForm(){
+  const name = S.account?.name || '';
+  const mail = S.account?.mail || '';
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="sheet">
+      <h2>Zahlungsdaten</h2>
+      <p class="sub" style="margin-bottom:var(--s4)">4,99 € / Monat, jederzeit kündbar. Demo: Deine Angaben bleiben nur in dieser App, es wird nichts wirklich belastet.</p>
+      <div class="stack">
+        <input class="field" id="payName" type="text" placeholder="Dein Name" autocomplete="off" value="${esc(name)}">
+        <input class="field" id="payMail" type="email" placeholder="Deine E-Mail" autocomplete="off" value="${esc(mail)}">
+        <input class="field" id="payCard" type="text" inputmode="numeric" placeholder="Kartennummer (z. B. 4242 4242 4242 4242)" autocomplete="off" maxlength="19" oninput="formatCardInput(this)">
+        <div class="row">
+          <input class="field" id="payExpiry" type="text" inputmode="numeric" placeholder="MM/JJ" autocomplete="off" maxlength="5" oninput="formatExpiryInput(this)">
+          <input class="field" id="payCvc" type="text" inputmode="numeric" placeholder="CVC" autocomplete="off" maxlength="4">
+        </div>
+        <button class="btn warm" onclick="submitPayment()">4,99 € jetzt bestellen</button>
+        <button class="btn ghost" onclick="openPaywall()">Zurück</button>
+      </div>
+      <p class="usage-note" id="payErr" style="color:var(--bad)"></p>
+    </div>
+  </div>`;
+}
+function formatCardInput(inp){
+  const v = inp.value.replace(/\D/g,'').slice(0,16);
+  inp.value = v.replace(/(.{4})/g,'$1 ').trim();
+}
+function formatExpiryInput(inp){
+  let v = inp.value.replace(/\D/g,'').slice(0,4);
+  if(v.length>=3) v = v.slice(0,2)+'/'+v.slice(2);
+  inp.value = v;
+}
+async function submitPayment(){
+  const name=(el('payName')?.value||'').trim();
+  const mail=(el('payMail')?.value||'').trim();
+  const card=(el('payCard')?.value||'').replace(/\s/g,'');
+  const expiry=(el('payExpiry')?.value||'').trim();
+  const cvc=(el('payCvc')?.value||'').trim();
+  const err=el('payErr');
+  if(!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)){ if(err) err.textContent='Bitte Name und eine gültige E-Mail angeben.'; return; }
+  if(!/^\d{16}$/.test(card)){ if(err) err.textContent='Bitte eine 16-stellige Kartennummer angeben.'; return; }
+  if(!/^\d{2}\/\d{2}$/.test(expiry)){ if(err) err.textContent='Bitte das Ablaufdatum im Format MM/JJ angeben.'; return; }
+  if(!/^\d{3,4}$/.test(cvc)){ if(err) err.textContent='Bitte einen gültigen CVC angeben.'; return; }
+  if(!S.account){ S.account={name, mail, createdAt:Date.now()}; await sset('nonna:account', S.account); }
+  S.pro=true;
+  await sset('nonna:pro', true);
+  track('purchase', {value:4.99, currency:'EUR', items:[{item_name:'Nonna Famiglia', item_category:'subscription'}]});
+  render();
+  openPurchaseConfirm();
+}
+function openPurchaseConfirm(){
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this){closeModal();}">
+    <div class="sheet" style="text-align:center">
+      <div style="font-size:40px;margin-bottom:var(--s2)">🎉</div>
+      <h2 style="font-family:var(--serif);font-style:italic">Willkommen in der Famiglia.</h2>
+      <p class="sub" style="margin-bottom:var(--s4)">Jetzt kann's richtig losgehen – unbegrenzt kochen, Lieblinge sammeln, die Woche planen.</p>
+      <button class="btn warm" onclick="closeModal()">Los geht's</button>
+    </div>
+  </div>`;
+}
+function openProfile(){
+  const left=usageLeft();
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="sheet">
+      <h2>Profil</h2>
+      <div class="toggle"><div><b style="font-size:15px">Nonna Famiglia</b><p style="font-size:13px;color:var(--muted)">Simulierter Mitgliedschaftsstatus (Demo)</p></div>
+        <button class="sw ${S.pro?'on':''}" onclick="toggleProSwitch()" aria-label="Pro umschalten"></button></div>
+      <div class="toggle"><div><b style="font-size:15px">Konto</b><p style="font-size:13px;color:var(--muted)">${S.account?esc(S.account.name)+' · '+esc(S.account.mail):'Nicht angemeldet'}</p></div>
+        ${S.account?'<button class="chip-btn" onclick="logoutAccount()">Abmelden</button>':''}</div>
+      <div class="toggle"><div><b style="font-size:15px">Gratis-Runden</b><p style="font-size:13px;color:var(--muted)">${S.pro?'Unbegrenzt mit Pro':S.account?`Noch ${left} von ${FREE_LIMIT} in dieser Woche`:'Anmeldung erforderlich'}</p></div></div>
+      <div class="toggle"><div><b style="font-size:15px">Gespeicherte Antworten</b><p style="font-size:13px;color:var(--muted)">${S.answers?'Werden beim nächsten Kochen vorgeschlagen':'Noch keine – koch einmal, dann merkt Nonna sich alles'}</p></div>
+        ${S.answers?'<button class="chip-btn" onclick="clearAnswers()">Zurücksetzen</button>':''}</div>
+      <div class="toggle"><div><b style="font-size:15px">Küchenschlüssel (API-Key)</b><p style="font-size:13px;color:var(--muted)">${S.apiKey?'Hinterlegt · endet auf …'+esc(S.apiKey.slice(-4)):'Noch kein Schlüssel gespeichert'}</p></div>
+        <button class="chip-btn" onclick="changeApiKey().then(()=>{openProfile();render();}).catch(()=>{})">${S.apiKey?'Ändern':'Hinzufügen'}</button></div>
+      ${S.apiKey?'<button class="btn ghost" style="margin-top:var(--s2)" onclick="clearApiKey()">Schlüssel entfernen</button>':''}
+      <button class="btn ghost" style="margin-top:var(--s4)" onclick="closeModal()">Schließen</button>
+    </div>
+  </div>`;
+}
+async function toggleProSwitch(){ S.pro=!S.pro; await sset('nonna:pro',S.pro); openProfile(); render(); }
+async function clearAnswers(){ S.answers=null; await sset('nonna:answers',null); openProfile(); }
+function closeModal(){ el('modal').innerHTML=''; }
+
+/* ============ INIT ============ */
+(async function(){
+  el('app').innerHTML = loaderHTML('concepts');
+  try{ await loadAll(); }catch(e){}
+  stopLoader();
+  render();
+  track('screen_view', {screen_name:S.tab});
+})();
+</script>
+</body>
+</html>
