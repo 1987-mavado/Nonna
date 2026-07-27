@@ -265,7 +265,7 @@ nav button .lock-mini{font-size:9px;color:var(--warm)}
 <script>
 /* ============ STATE ============ */
 const S = {
-  tab:'cook', pro:false, usage:[], favs:[], answers:null, mealplan:null, account:null, apiKey:null,
+  tab:'cook', pro:false, usage:[], favs:[], answers:null, mealplan:null, account:null,
   school:{completed:[],cache:{}},
   gen:{step:'input', ingredients:[], qIndex:0, draft:{}, concepts:[], detail:null, wish:'', prevTitles:[], retry:null},
   mp:{step:'idle', ingredients:'', days:5, meals:2, view:'plan', detail:null, startDate:null, calMonth:null},
@@ -779,10 +779,9 @@ async function sset(key,val){
 }
 
 async function loadAll(){
-  const [pro,usage,favs,answers,mealplan,school,account,schoolLevel,apiKey] = await Promise.all([
+  const [pro,usage,favs,answers,mealplan,school,account,schoolLevel] = await Promise.all([
     sget('nonna:pro'), sget('nonna:usage'), sget('nonna:favorites'),
-    sget('nonna:answers'), sget('nonna:mealplan'), sget('nonna:school'), sget('nonna:account'), sget('nonna:schoolLevel'),
-    sget('nonna:apiKey')
+    sget('nonna:answers'), sget('nonna:mealplan'), sget('nonna:school'), sget('nonna:account'), sget('nonna:schoolLevel')
   ]);
   S.pro = !!pro;
   S.usage = Array.isArray(usage)?usage:[];
@@ -790,7 +789,6 @@ async function loadAll(){
   S.answers = answers||null;
   S.mealplan = mealplan||null;
   S.account = account||null;
-  S.apiKey = apiKey||null;
   if(school) S.school = school;
   if(schoolLevel) S.sc.level = schoolLevel;
 }
@@ -812,68 +810,28 @@ function extractJSON(text){
   return JSON.parse(t.slice(a,b+1));
 }
 
-/* ============ API-KEY ============ */
-function ensureApiKey(){
-  return new Promise((resolve,reject)=>{
-    if(S.apiKey){ resolve(S.apiKey); return; }
-    openApiKeyModal(resolve,reject);
-  });
-}
-function changeApiKey(){
-  return new Promise((resolve,reject)=>{ openApiKeyModal(resolve,reject); });
-}
-function openApiKeyModal(resolve,reject){
-  S._apiKeyResolve = resolve;
-  S._apiKeyReject = reject;
-  el('modal').innerHTML = `
-  <div class="overlay" onclick="if(event.target===this)cancelApiKey()">
-    <div class="sheet">
-      <h2>Dein Küchenschlüssel</h2>
-      <p class="sub" style="margin-bottom:var(--s4)">Nonna kocht mit deinem eigenen Anthropic-API-Key. Er wird nur auf diesem Gerät gespeichert, nie an Dritte weitergegeben.</p>
-      <div class="stack">
-        <input class="field" id="apiKeyInput" type="password" placeholder="sk-ant-..." autocomplete="off">
-        <button class="btn" onclick="submitApiKey()">Schlüssel speichern</button>
-        <button class="btn ghost" onclick="cancelApiKey()">Abbrechen</button>
-      </div>
-      <p class="usage-note" id="apiKeyErr" style="color:var(--bad)"></p>
-      <p class="usage-note">Einen Key bekommst du unter console.anthropic.com/settings/keys.</p>
-    </div>
-  </div>`;
-  setTimeout(()=>{ const inp=el('apiKeyInput'); if(inp) inp.focus(); },50);
-}
-async function submitApiKey(){
-  const key = (el('apiKeyInput')?.value||'').trim();
-  if(!key){ const e=el('apiKeyErr'); if(e) e.textContent='Bitte gib deinen API-Key ein.'; return; }
-  S.apiKey = key;
-  await sset('nonna:apiKey', key);
-  closeModal();
-  const resolve = S._apiKeyResolve; S._apiKeyResolve=null; S._apiKeyReject=null;
-  if(resolve) resolve(key);
-}
-function cancelApiKey(){
-  closeModal();
-  const reject = S._apiKeyReject; S._apiKeyResolve=null; S._apiKeyReject=null;
-  if(reject) reject(new Error('Kein API-Key hinterlegt – Nonna braucht ihn zum Kochen.'));
-}
-async function clearApiKey(){ S.apiKey=null; await sset('nonna:apiKey', null); openProfile(); }
+/* ============ CLAUDE (via Supabase Edge Function Proxy) ============
+   Der Anthropic-API-Key liegt NICHT mehr im Client – er wird server-seitig
+   in der Supabase Edge Function 'ask-claude' als Secret gehalten.
+   Hier steht nur die Supabase Project-URL + der öffentliche 'anon' Key
+   (beide sind laut Supabase-Doku für Frontend-Nutzung vorgesehen). */
+const SUPABASE_URL = 'https://dgcubciacluzfvxnqzez.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnY3ViY2lhY2x1emZ2eG5xemV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTY1MDgsImV4cCI6MjA4OTMzMjUwOH0.rv6fkW5PBzCOelXk5YIatOyry3tidI-X-5RDEoPR1fI';
 
 async function askClaude(userPrompt, system=SYSTEM_CHEF, maxTokens=1400){
-  const apiKey = await ensureApiKey();
   const call = async (tokens)=>{
     /* Wichtig: KEIN AbortSignal – der Vorschau-Proxy kann das Objekt nicht klonen.
        Timeout deshalb über Promise.race. */
     let res;
     try{
-      const fetchP = fetch('https://api.anthropic.com/v1/messages',{
+      const fetchP = fetch(SUPABASE_URL+'/functions/v1/ask-claude',{
         method:'POST',
         headers:{
           'Content-Type':'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version':'2023-06-01',
-          'anthropic-dangerous-direct-browser-access':'true'
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization':'Bearer '+SUPABASE_ANON_KEY
         },
-        body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:tokens, system,
-          messages:[{role:'user', content:userPrompt}] })
+        body: JSON.stringify({ prompt:userPrompt, system, maxTokens:tokens })
       });
       const timeoutP = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')),60000));
       res = await Promise.race([fetchP, timeoutP]);
@@ -883,7 +841,6 @@ async function askClaude(userPrompt, system=SYSTEM_CHEF, maxTokens=1400){
     }
     const data = await res.json().catch(()=>({}));
     if(data.error){
-      if(res.status===401){ S.apiKey=null; await sset('nonna:apiKey', null); }
       throw new Error('API '+res.status+': '+(data.error.message||data.error.type||'unbekannt'));
     }
     if(!res.ok) throw new Error('API-Status '+res.status);
@@ -1814,9 +1771,6 @@ function openProfile(){
       <div class="toggle"><div><b style="font-size:15px">Gratis-Runden</b><p style="font-size:13px;color:var(--muted)">${S.pro?'Unbegrenzt mit Pro':S.account?`Noch ${left} von ${FREE_LIMIT} in dieser Woche`:'Anmeldung erforderlich'}</p></div></div>
       <div class="toggle"><div><b style="font-size:15px">Gespeicherte Antworten</b><p style="font-size:13px;color:var(--muted)">${S.answers?'Werden beim nächsten Kochen vorgeschlagen':'Noch keine – koch einmal, dann merkt Nonna sich alles'}</p></div>
         ${S.answers?'<button class="chip-btn" onclick="clearAnswers()">Zurücksetzen</button>':''}</div>
-      <div class="toggle"><div><b style="font-size:15px">Küchenschlüssel (API-Key)</b><p style="font-size:13px;color:var(--muted)">${S.apiKey?'Hinterlegt · endet auf …'+esc(S.apiKey.slice(-4)):'Noch kein Schlüssel gespeichert'}</p></div>
-        <button class="chip-btn" onclick="changeApiKey().then(()=>{openProfile();render();}).catch(()=>{})">${S.apiKey?'Ändern':'Hinzufügen'}</button></div>
-      ${S.apiKey?'<button class="btn ghost" style="margin-top:var(--s2)" onclick="clearApiKey()">Schlüssel entfernen</button>':''}
       <button class="btn ghost" style="margin-top:var(--s4)" onclick="closeModal()">Schließen</button>
     </div>
   </div>`;
