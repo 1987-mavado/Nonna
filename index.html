@@ -129,7 +129,7 @@ input.field{height:52px}
 .step .n{flex:0 0 30px;height:30px;border-radius:50%;background:var(--blue-700);color:#fff;font-family:var(--display);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
 .step p{font-size:14.5px;line-height:1.55;padding-top:4px}
 /* Tabbar */
-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:760px;background:rgba(247,250,253,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;padding:var(--s2) var(--s2) calc(10px + env(safe-area-inset-bottom))}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:760px;background:rgba(247,250,253,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;padding:var(--s2) var(--s2) calc(10px + env(safe-area-inset-bottom));z-index:30}
 nav button{flex:1;border:0;background:none;cursor:pointer;font-family:var(--body);font-size:11px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:12px}
 nav button.on{color:var(--blue-700)}
 nav button .ic{font-size:20px;line-height:1}
@@ -156,6 +156,10 @@ nav button .lock-mini{font-size:9px;color:var(--warm)}
 .seg{display:flex;background:var(--blue-100);border-radius:14px;padding:4px;gap:4px;margin:0 0 var(--s4)}
 .seg button{flex:1;border:0;cursor:pointer;padding:10px;border-radius:11px;background:transparent;font-family:var(--body);font-weight:600;font-size:14px;color:var(--muted)}
 .seg button.on{background:var(--surface);color:var(--blue-900);box-shadow:0 2px 8px rgba(28,56,77,.1)}
+.pstepper{display:flex;align-items:center;justify-content:center;gap:var(--s4);background:var(--blue-050);border-radius:14px;padding:var(--s2) var(--s4);margin:0 0 var(--s4)}
+.pstepper button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:18px;font-weight:700;cursor:pointer;color:var(--blue-700);line-height:1}
+.pstepper button:disabled{opacity:.35;cursor:default}
+.pstepper .pnum{font-family:var(--display);font-weight:700;font-size:16px;min-width:88px;text-align:center}
 .preset-row{display:flex;gap:var(--s2);margin-top:var(--s2)}
 .preset-row .chip-btn{padding:7px 12px}
 .day-grid{display:flex;flex-direction:column;gap:var(--s3)}
@@ -810,6 +814,41 @@ function extractJSON(text){
   return JSON.parse(t.slice(a,b+1));
 }
 
+/* ============ PERSONENANZAHL / MENGEN-SKALIERUNG ============
+   Fundament: Rezepte tragen basisPersonen + numerische Mengen (zutaten[].menge).
+   Skalierung passiert rein lokal (kein erneuter API-Call). */
+function parsePersonCount(answers){
+  const m = /(\d+)\s*Person/i.exec((answers||{}).personen||'');
+  const n = m ? parseInt(m[1],10) : 2;
+  return (n>=1) ? n : 2;
+}
+function roundToStep(n, step){ return Math.round(n/step)*step; }
+function scaleMenge(menge, einheit, faktor){
+  const roh = Number(menge)*faktor;
+  if(!isFinite(roh)) return menge;
+  const e = (einheit||'').trim().toLowerCase();
+  if(!einheit){ return Math.max(1, Math.ceil(roh)); } // zählbar: nie halbe Stück
+  if(e==='g'||e==='ml'){ return roh>=20 ? roundToStep(roh,5) : Math.max(1,Math.round(roh)); }
+  if(e==='tl'||e==='el'){ return roundToStep(roh,0.25); }
+  return Math.round(roh*100)/100; // sonstige Einheiten: sinnvoll gerundet, kein hartes Schema vorgegeben
+}
+function scaleZutaten(zutaten, basisPersonen, neuePersonen){
+  const basis = basisPersonen||2, ziel = Math.max(1, neuePersonen||basis);
+  if(ziel===basis) return (zutaten||[]).map(z=>({...z}));
+  const faktor = ziel/basis;
+  return (zutaten||[]).map(z=>({...z, menge: scaleMenge(z.menge, z.einheit, faktor)}));
+}
+function fmtMenge(n){
+  if(n===null||n===undefined||n==='') return '';
+  const num = Number(n);
+  if(isNaN(num)) return String(n);
+  if(Number.isInteger(num)) return String(num);
+  const fracMap = {0.25:'¼',0.5:'½',0.75:'¾'};
+  const whole = Math.floor(num), rest = Math.round((num-whole)*100)/100;
+  if(fracMap[rest]) return whole>0 ? `${whole}${fracMap[rest]}` : fracMap[rest];
+  return String(Math.round(num*100)/100);
+}
+
 /* ============ CLAUDE (via Supabase Edge Function Proxy) ============
    Der Anthropic-API-Key liegt NICHT mehr im Client – er wird server-seitig
    in der Supabase Edge Function 'ask-claude' als Secret gehalten.
@@ -991,6 +1030,7 @@ function cookInput(){
   <textarea class="field" id="ingInput" rows="2" placeholder="z. B. Hähnchen, Zucchini, Feta …"></textarea>
   <button class="btn ghost" style="margin-top:var(--s2)" onclick="addIngredients()">Zutaten hinzufügen</button>
   <div class="chips">${g.ingredients.map((z,i)=>`<span class="chip">${esc(z)}<button onclick="removeIng(${i})" aria-label="Entfernen">✕</button></span>`).join('')}</div>
+  ${g.ingredients.length===1?`<p class="usage-note" style="color:var(--bad)">Mit nur einer Zutat wird's dünn – gib mir noch mindestens eine dazu.</p>`:''}
   <button class="btn" style="margin-top:var(--s2)" ${g.ingredients.length<2?'disabled':''} onclick="startQuestions()">Weiter ${g.ingredients.length<2?'(mind. 2 Zutaten)':''}</button>
   <p class="usage-note">${S.pro?'★ Famiglia aktiv':S.account?`Noch ${left} von ${FREE_LIMIT} Gratis-Runden diese Woche`:'Kostenlos anmelden und 2 Rezeptrunden pro Woche sichern.'}</p>`;
 }
@@ -1091,6 +1131,12 @@ function cookConcepts(){
   <button class="back" onclick="restartGen()">← Neue Zutaten</button>
   <h1 class="screen" style="font-size:28px">Fünf Ideen, frisch für dich ausgedacht</h1>
   <p class="sub">Tippe ein Konzept an – Nonna schreibt dir dann das volle Rezept.</p>
+  ${S.answers?(()=>{ const pc=parsePersonCount(S.answers); return `
+  <div class="pstepper">
+    <button onclick="setConceptsPersonen(-1)" ${pc<=1?'disabled':''} aria-label="Weniger Personen">–</button>
+    <span class="pnum">👥 ${pc} Person${pc===1?'':'en'}</span>
+    <button onclick="setConceptsPersonen(1)" aria-label="Mehr Personen">+</button>
+  </div>`; })():''}
   <div class="concept-grid">
   ${g.concepts.map((k,i)=>`
     <div class="card concept" onclick="openDetail(${i})">
@@ -1113,6 +1159,13 @@ function restartGen(){ S.gen={step:'input',ingredients:S.gen.ingredients,qIndex:
 function regenerate(){ S.gen.wish=''; generateConcepts(); }
 function regenerateWithWish(){ const w=el('wishInput'); S.gen.wish = w?w.value.trim():''; generateConcepts(); }
 function backToConcepts(){ S.gen.step='concepts'; render(); }
+async function setConceptsPersonen(delta){
+  if(!S.answers) return;
+  const next = Math.max(1, parsePersonCount(S.answers)+delta);
+  S.answers = {...S.answers, personen:`${next} Person${next===1?'':'en'}`};
+  await sset('nonna:answers', S.answers);
+  render();
+}
 
 async function openDetail(i){
   const g=S.gen; const k=g.concepts[i];
@@ -1125,10 +1178,13 @@ Antworten des Nutzers:
 ${answersText(S.answers)}
 
 Arbeite NUR dieses eine Rezept vollständig aus. Kompakt: max. 7 Schritte, jeder Schritt max. 2 Sätze.
-JSON-Schema (exakt, Deutsch):
-{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1-2 Sätze","zutaten":[{"menge":"200","einheit":"g","name":"..."}],"schritte":["..."],"anrichten":"1-2 Sätze","geschmacksprofil":"1-2 Sätze"}`;
+JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
+{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1-2 Sätze","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":["..."],"anrichten":"1-2 Sätze","geschmacksprofil":"1-2 Sätze"}
+Bei zählbaren Zutaten (Eier, Zehen, Stangen, Dosen …): "einheit":null und die Zähleinheit steckt im "name" (z. B. "große Eier" statt Name "Ei" + Einheit "Stück").`;
     const data = await askClaude(prompt, SYSTEM_CHEF, 1600);
     if(!data.titel || !data.schritte) throw new Error('Schema: Rezeptfelder fehlen');
+    data.basisPersonen = parsePersonCount(S.answers); // lokale Nutzerangabe ist die verlässliche Quelle, nicht die Modellantwort
+    data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
     g.detail = data; g.step='detail';
     track('recipe_detail_opened', {titel:data.titel});
   }catch(e){ S.lastErr = S.lastErr||e.message; g.step='error'; g.retry=`openDetail(${i})`; }
@@ -1137,6 +1193,8 @@ JSON-Schema (exakt, Deutsch):
 
 /* Rezept-Detailansicht */
 function recipeHTML(r, backFn){
+  const personen = r.basisPersonen ? (r._personen||r.basisPersonen) : null;
+  const zList = r.basisPersonen ? scaleZutaten(r.zutaten, r.basisPersonen, personen) : (r.zutaten||[]);
   return `
   <button class="back" onclick="${backFn}">← Zurück</button>
   <div class="r-head">
@@ -1144,9 +1202,15 @@ function recipeHTML(r, backFn){
   </div>
   <p class="sub" style="margin-bottom:var(--s4)">${esc(r.konzept||'')}</p>
   ${r.zutatenanalyse?`<div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">${esc(r.zutatenanalyse)}</div></div>`:''}
+  ${r.basisPersonen?`
+  <div class="pstepper">
+    <button onclick="changeRecipePersonen(-1)" ${personen<=1?'disabled':''} aria-label="Weniger Personen">–</button>
+    <span class="pnum">👥 ${personen} Person${personen===1?'':'en'}</span>
+    <button onclick="changeRecipePersonen(1)" aria-label="Mehr Personen">+</button>
+  </div>`:''}
   <div class="sec-label" style="margin-top:0">Zutaten</div>
   <div class="card" style="padding:var(--s2) var(--s5);margin-bottom:0">
-    ${(r.zutaten||[]).map(z=>`<div class="zutat"><span>${esc(z.name)}</span><span class="m">${esc(z.menge)} ${esc(z.einheit||'')}</span></div>`).join('')}
+    ${zList.map(z=>`<div class="zutat"><span>${esc(z.name)}</span><span class="m">${esc(fmtMenge(z.menge))} ${esc(z.einheit||'')}</span></div>`).join('')}
   </div>
   <div class="row" style="margin-top:var(--s2);margin-bottom:var(--s3)">
     <button class="btn ghost" style="font-size:13px;padding:10px" onclick="downloadRecipeIngredients()">⬇︎ Zutaten herunterladen</button>
@@ -1164,10 +1228,18 @@ function getCurrentRecipe(){
   if(S.tab==='meal') return S.mp.detail;
   return null;
 }
+function changeRecipePersonen(delta){
+  const r = getCurrentRecipe();
+  if(!r || !r.basisPersonen) return;
+  const cur = r._personen || r.basisPersonen;
+  r._personen = Math.max(1, cur+delta);
+  render();
+}
 function recipeIngredientsText(r){
   if(!r) return '';
+  const zutaten = r.basisPersonen ? scaleZutaten(r.zutaten, r.basisPersonen, r._personen||r.basisPersonen) : (r.zutaten||[]);
   let t = `${r.titel}\n\n`;
-  (r.zutaten||[]).forEach(z=> t += `– ${z.menge?z.menge+' ':''}${z.einheit?z.einheit+' ':''}${z.name}\n`);
+  zutaten.forEach(z=> t += `– ${z.menge?fmtMenge(z.menge)+' ':''}${z.einheit?z.einheit+' ':''}${z.name}\n`);
   return t.trim()+'\n';
 }
 function safeFilename(s){ return (s||'rezept').toLowerCase().replace(/[^a-z0-9äöüß]+/g,'-').replace(/(^-|-$)/g,'')||'rezept'; }
@@ -1460,10 +1532,13 @@ async function openMealDetail(i){
 Gericht: ${m.titel} – ${m.kurzbeschreibung||''} (Slot: ${m.mahlzeit}, Prep-Hinweis: ${m.prepHinweis||'-'})
 Verfügbare Zutaten: ${S.mp.ingredients||'wie im Plan'}
 ${S.answers?`Kontext zum Nutzer:\n${answersText(S.answers)}`:''}
-JSON-Schema (exakt, Deutsch):
-{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1 Satz","zutaten":[{"menge":"...","einheit":"...","name":"..."}],"schritte":["..."],"anrichten":"1 Satz","geschmacksprofil":"1 Satz"}`;
+JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
+{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1 Satz","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":["..."],"anrichten":"1 Satz","geschmacksprofil":"1 Satz"}
+Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name".`;
     const data = await askClaude(prompt, SYSTEM_CHEF, 1600);
     if(!data.titel) throw new Error('Schema: Rezeptfelder fehlen');
+    data.basisPersonen = parsePersonCount(S.answers);
+    data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
     S.mp.detail = data; S.mp.step='detail';
   }catch(e){ S.lastErr = S.lastErr||e.message; S.mp.step='error'; }
   render();
@@ -1611,7 +1686,7 @@ function recipeCore(r){
   <p class="sub" style="margin-bottom:var(--s4)">${esc(r.konzept||'')}</p>
   <div class="sec-label" style="margin-top:0">Zutaten</div>
   <div class="card" style="padding:var(--s2) var(--s5);margin-bottom:0">
-    ${(r.zutaten||[]).map(z=>`<div class="zutat"><span>${esc(z.name)}</span><span class="m">${esc(z.menge)} ${esc(z.einheit||'')}</span></div>`).join('')}
+    ${(r.zutaten||[]).map(z=>`<div class="zutat"><span>${esc(z.name)}</span><span class="m">${esc(fmtMenge(z.menge))} ${esc(z.einheit||'')}</span></div>`).join('')}
   </div>
   <div class="row" style="margin-top:var(--s2);margin-bottom:var(--s3)">
     <button class="btn ghost" style="font-size:13px;padding:10px" onclick="downloadLessonIngredients()">⬇︎ Zutaten herunterladen</button>
