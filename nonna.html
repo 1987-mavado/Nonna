@@ -52,6 +52,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:var
 .wordmark svg{display:block}
 .chip-btn{border:0;cursor:pointer;font-family:var(--body);font-weight:600;font-size:13px;padding:8px 14px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--blue-700)}
 .chip-btn.pro-on{background:var(--warm-soft);border-color:#EBD9BC;color:#966A22}
+.chip-btn.on{background:var(--blue-700);border-color:var(--blue-700);color:#fff}
 /* Main + Raster */
 main{flex:1;overflow-y:auto;padding:0 var(--pad) 120px}
 h1.screen{font-family:var(--display);font-weight:800;font-size:34px;line-height:1.05;letter-spacing:-.03em;color:var(--blue-900);margin:var(--s4) 0 var(--s2)}
@@ -160,6 +161,9 @@ nav button .lock-mini{font-size:9px;color:var(--warm)}
 .pstepper button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:18px;font-weight:700;cursor:pointer;color:var(--blue-700);line-height:1}
 .pstepper button:disabled{opacity:.35;cursor:default}
 .pstepper .pnum{font-family:var(--display);font-weight:700;font-size:16px;min-width:88px;text-align:center}
+.star-rating{display:flex;gap:4px;margin-bottom:var(--s3)}
+.star-rating button{background:none;border:0;cursor:pointer;padding:2px;font-size:24px;line-height:1;color:var(--line)}
+.star-rating button.on{color:#E3A85C}
 .preset-row{display:flex;gap:var(--s2);margin-top:var(--s2)}
 .preset-row .chip-btn{padding:7px 12px}
 .day-grid{display:flex;flex-direction:column;gap:var(--s3)}
@@ -269,12 +273,14 @@ nav button .lock-mini{font-size:9px;color:var(--warm)}
 <script>
 /* ============ STATE ============ */
 const S = {
-  tab:'cook', pro:false, usage:[], favs:[], answers:null, mealplan:null, account:null,
+  tab:'cook', pro:false, usage:[], favs:[], history:[], answers:null, mealplan:null, account:null,
+  profile:{allergies:[], allergiesOther:'', age:'', location:'', password:'', diet:'keine'},
   school:{completed:[],cache:{}},
-  gen:{step:'input', ingredients:[], qIndex:0, draft:{}, concepts:[], detail:null, wish:'', prevTitles:[], retry:null},
+  gen:{step:'input', ingredients:[], qIndex:0, draft:{}, concepts:[], detail:null, wish:'', prevTitles:[], retry:null, mode:'frei', photoState:'idle', photoErrorMsg:''},
   mp:{step:'idle', ingredients:'', days:5, meals:2, view:'plan', detail:null, startDate:null, calMonth:null},
   sc:{view:'path', level:'mittel', lessonIdx:null, lesson:null, phase:'intro', quizIdx:0, quizAnswered:null, correct:0, showShopping:false},
   fav:{view:'list', open:null},
+  hist:{view:'list', open:null, q:'', minStars:0},
   loadTimer:null, lastErr:null
 };
 const FREE_LIMIT = 2;
@@ -783,16 +789,19 @@ async function sset(key,val){
 }
 
 async function loadAll(){
-  const [pro,usage,favs,answers,mealplan,school,account,schoolLevel] = await Promise.all([
-    sget('nonna:pro'), sget('nonna:usage'), sget('nonna:favorites'),
-    sget('nonna:answers'), sget('nonna:mealplan'), sget('nonna:school'), sget('nonna:account'), sget('nonna:schoolLevel')
+  const [pro,usage,favs,history,answers,mealplan,school,account,schoolLevel,profile] = await Promise.all([
+    sget('nonna:pro'), sget('nonna:usage'), sget('nonna:favorites'), sget('nonna:history'),
+    sget('nonna:answers'), sget('nonna:mealplan'), sget('nonna:school'), sget('nonna:account'), sget('nonna:schoolLevel'),
+    sget('nonna:profile')
   ]);
   S.pro = !!pro;
   S.usage = Array.isArray(usage)?usage:[];
   S.favs = Array.isArray(favs)?favs:[];
+  S.history = Array.isArray(history)?history:[];
   S.answers = answers||null;
   S.mealplan = mealplan||null;
   S.account = account||null;
+  if(profile) S.profile = {...S.profile, ...profile};
   if(school) S.school = school;
   if(schoolLevel) S.sc.level = schoolLevel;
 }
@@ -800,11 +809,20 @@ async function loadAll(){
 /* ============ API ============ */
 const SYSTEM_CHEF = `Du agierst als Spitzenkoch und Wettbewerbs-Finalist – bekannt für kulinarische Kreativität, handwerkliche Perfektion und exzellentes Gespür für Geschmack, Textur und Balance.
 Harte Regeln:
-- Arbeite ausschließlich mit den übergebenen Zutaten. Kreative Freiheit hast du nur bei Gewürzen, Kräutern und Grundzutaten (Öl, Salz, Pfeffer, Butter, Zitrone, Essig, Fonds).
+- Arbeite ausschließlich mit den übergebenen Zutaten. Kreative Freiheit hast du nur bei Gewürzen, Kräutern und Grundzutaten wie Öl/Salz/Pfeffer/Butter/Zitrone/Essig/Fonds/Wasser/Zucker.
 - Berücksichtige die Angaben des Nutzers (handwerkliches Geschick, Küchenstil, Ausstattung, Zeit, Personenzahl) strikt.
+- Falls im Nutzer-Prompt Allergien/Unverträglichkeiten oder eine Diät (vegan/vegetarisch) angegeben sind: das sind harte Sicherheitsregeln, keine Geschmackspräferenzen – sie stehen über allem anderen, auch über der Zutatenliste des Nutzers.
 - Gerichte dürfen überraschen und müssen keine existierenden Klassiker sein. Jedes Gericht ist eigenständig mit klarem Konzept.
 - Sprache: professionell, lebendig, inspirierend – aber textlich kurz und übersichtlich.
 - Erwähne nirgendwo "The Taste".
+- Antworte AUSSCHLIESSLICH mit validem JSON nach dem vorgegebenen Schema. Kein Markdown, keine Backticks, kein Text davor oder danach.`;
+
+const SYSTEM_VISION = `Du analysierst ein Foto (Kühlschrank, Vorratsschrank, Küchentisch o.ä.) und erkennst ausschließlich Lebensmittel/Zutaten, die eindeutig auf dem Bild zu erkennen sind.
+Harte Regeln:
+- Erfinde nichts. Nur Zutaten aufführen, die du auf dem Bild wirklich siehst.
+- Kurze, alltagssprachliche deutsche Bezeichnungen (z. B. "Paprika" statt "rote und gelbe Paprikaschoten, ca. 2 Stück").
+- Keine Mengenangaben, keine Marken, keine Verpackungstexte – nur der Name der Zutat.
+- Ist auf dem Bild nichts Essbares erkennbar, gib ein leeres Array zurück.
 - Antworte AUSSCHLIESSLICH mit validem JSON nach dem vorgegebenen Schema. Kein Markdown, keine Backticks, kein Text davor oder danach.`;
 
 function extractJSON(text){
@@ -857,7 +875,7 @@ function fmtMenge(n){
 const SUPABASE_URL = 'https://dgcubciacluzfvxnqzez.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnY3ViY2lhY2x1emZ2eG5xemV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTY1MDgsImV4cCI6MjA4OTMzMjUwOH0.rv6fkW5PBzCOelXk5YIatOyry3tidI-X-5RDEoPR1fI';
 
-async function askClaude(userPrompt, system=SYSTEM_CHEF, maxTokens=1400){
+async function askClaude(userPrompt, system=SYSTEM_CHEF, maxTokens=1400, image=null){
   const call = async (tokens)=>{
     /* Wichtig: KEIN AbortSignal – der Vorschau-Proxy kann das Objekt nicht klonen.
        Timeout deshalb über Promise.race. */
@@ -870,7 +888,7 @@ async function askClaude(userPrompt, system=SYSTEM_CHEF, maxTokens=1400){
           'apikey': SUPABASE_ANON_KEY,
           'Authorization':'Bearer '+SUPABASE_ANON_KEY
         },
-        body: JSON.stringify({ prompt:userPrompt, system, maxTokens:tokens })
+        body: JSON.stringify(image ? { prompt:userPrompt, system, maxTokens:tokens, image } : { prompt:userPrompt, system, maxTokens:tokens })
       });
       const timeoutP = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')),60000));
       res = await Promise.race([fetchP, timeoutP]);
@@ -953,7 +971,7 @@ function loaderHTML(kind){
     </svg>
     <div>
       <div class="phrase" id="phrase">${esc(ph[0])}</div>
-      <div class="small">Echte KI am Herd – das dauert einen Moment.</div>
+      <div class="small">Nonna steht am Herd – das dauert einen Moment.</div>
     </div>
   </div>`;
 }
@@ -978,6 +996,7 @@ function render(){
   const app = el('app');
   if(S.tab==='cook') app.innerHTML = viewCook();
   else if(S.tab==='fav') app.innerHTML = viewFav();
+  else if(S.tab==='history') app.innerHTML = viewHistory();
   else if(S.tab==='meal') app.innerHTML = viewMeal();
   else if(S.tab==='school') app.innerHTML = viewSchool();
   app.scrollTop = 0; window.scrollTo(0,0);
@@ -985,6 +1004,7 @@ function render(){
 function renderHeaderHeart(){
   const r = (S.tab==='cook' && S.gen.step==='detail' && S.gen.detail) ? S.gen.detail
     : (S.tab==='fav' && S.fav.view==='detail' && S.fav.open) ? S.fav.open
+    : (S.tab==='history' && S.hist.view==='detail' && S.hist.open) ? S.hist.open
     : (S.tab==='meal' && S.mp.step==='detail' && S.mp.detail) ? S.mp.detail
     : null;
   const btn = el('headerHeart');
@@ -998,6 +1018,7 @@ function renderTabbar(){
   const tabs=[
     {id:'cook', ic:'🍳', l:'Kochen'},
     {id:'fav', ic:'❤️', l:'Lieblinge', pro:true},
+    {id:'history', ic:'📖', l:'Rezepte'},
     {id:'meal', ic:'🗓️', l:'Meal-Prep', pro:true},
     {id:'school', ic:'🎓', l:'Kochschule', pro:true}
   ];
@@ -1028,9 +1049,19 @@ function cookInput(){
   <h1 class="screen" style="font-size:clamp(17px,5.4vw,26px);white-space:nowrap;margin-bottom:var(--s5)">Was hast du denn da, mein Schatz?</h1>
   <div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">Kühlschrank auf, alles auf den Tisch. Ich mach was draus – versprochen.</div></div>
   <textarea class="field" id="ingInput" rows="2" placeholder="z. B. Hähnchen, Zucchini, Feta …"></textarea>
-  <button class="btn ghost" style="margin-top:var(--s2)" onclick="addIngredients()">Zutaten hinzufügen</button>
+  <div class="row" style="margin-top:var(--s2)">
+    <button class="btn ghost" onclick="addIngredients()">Zutaten hinzufügen</button>
+    <button class="btn ghost" onclick="triggerPhotoIngredients()" ${g.photoState==='loading'?'disabled':''}>📷 Foto${S.pro?'':' 🔒'}</button>
+  </div>
+  <input type="file" id="ingPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoIngredients(this)">
+  ${g.photoState==='loading'?`<p class="usage-note">Nonna schaut sich das Foto an …</p>`:''}
+  ${g.photoState==='error'?`<p class="usage-note" style="color:var(--bad)">${esc(g.photoErrorMsg||'Foto konnte nicht ausgewertet werden.')}</p>`:''}
   <div class="chips">${g.ingredients.map((z,i)=>`<span class="chip">${esc(z)}<button onclick="removeIng(${i})" aria-label="Entfernen">✕</button></span>`).join('')}</div>
   ${g.ingredients.length===1?`<p class="usage-note" style="color:var(--bad)">Mit nur einer Zutat wird's dünn – gib mir noch mindestens eine dazu.</p>`:''}
+  <div class="seg" style="margin-top:var(--s3)">
+    <button class="${(g.mode||'frei')==='frei'?'on':''}" onclick="setGenMode('frei')">Alles erlaubt</button>
+    <button class="${g.mode==='leicht'?'on':''}" onclick="setGenMode('leicht')">Leicht &amp; Gut</button>
+  </div>
   <button class="btn" style="margin-top:var(--s2)" ${g.ingredients.length<2?'disabled':''} onclick="startQuestions()">Weiter ${g.ingredients.length<2?'(mind. 2 Zutaten)':''}</button>
   <p class="usage-note">${S.pro?'★ Famiglia aktiv':S.account?`Noch ${left} von ${FREE_LIMIT} Gratis-Runden diese Woche`:'Kostenlos anmelden und 2 Rezeptrunden pro Woche sichern.'}</p>`;
 }
@@ -1044,6 +1075,49 @@ function addIngredientsSilent(v){
   for(const p of parts){ if(!S.gen.ingredients.some(x=>x.toLowerCase()===p.toLowerCase())) S.gen.ingredients.push(p); }
 }
 function removeIng(i){ S.gen.ingredients.splice(i,1); render(); }
+
+/* ============ FOTO-ZUTATENERKENNUNG (Abschnitt 3, Claude Vision via ask-claude-Proxy) ============ */
+function triggerPhotoIngredients(){
+  if(!S.pro){ openPaywall(); render(); return; }
+  const inp = el('ingPhotoInput'); if(inp) inp.click();
+}
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{ const r=String(reader.result||''); const comma=r.indexOf(','); resolve(comma>=0?r.slice(comma+1):r); };
+    reader.onerror = ()=>reject(new Error('Foto konnte nicht gelesen werden.'));
+    reader.readAsDataURL(file);
+  });
+}
+async function handlePhotoIngredients(inputEl){
+  const file = inputEl.files && inputEl.files[0];
+  inputEl.value = '';
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ S.gen.photoState='error'; S.gen.photoErrorMsg='Das scheint kein Bild zu sein.'; render(); return; }
+  if(file.size > 10*1024*1024){ S.gen.photoState='error'; S.gen.photoErrorMsg='Foto ist zu groß (max. 10 MB).'; render(); return; }
+  S.gen.photoState='loading'; S.gen.photoErrorMsg=''; render();
+  try{
+    const base64 = await fileToBase64(file);
+    const data = await askClaude(
+      'Analysiere dieses Foto und liste alle klar erkennbaren Lebensmittel/Zutaten auf.\nJSON-Schema (exakt, Deutsch, sonst nichts): {"zutaten":["Paprika","Zwiebel"]}',
+      SYSTEM_VISION, 500, { media_type:file.type, data:base64 }
+    );
+    const found = Array.isArray(data.zutaten) ? data.zutaten.filter(x=>typeof x==='string' && x.trim()) : [];
+    if(!found.length){
+      S.gen.photoState='error';
+      S.gen.photoErrorMsg='Nonna konnte auf dem Foto keine Zutaten erkennen. Versuch ein helleres, näheres Bild oder trag sie von Hand ein.';
+      render(); return;
+    }
+    addIngredientsSilent(found.join(', '));
+    S.gen.photoState='idle';
+    track('ingredients_detected_from_photo', {count:found.length});
+    render();
+  }catch(e){
+    S.gen.photoState='error';
+    S.gen.photoErrorMsg = e.message || 'Foto konnte nicht ausgewertet werden.';
+    render();
+  }
+}
 
 function startQuestions(){
   const inp = el('ingInput');
@@ -1110,6 +1184,8 @@ Antworten des Nutzers:
 ${answersText(g.draft)}
 ${g.wish?`Zusätzlicher Wunsch des Nutzers: ${g.wish}`:''}
 ${g.prevTitles.length?`Diese Konzepte hatte er schon – schlage bewusst ANDERE Richtungen vor: ${g.prevTitles.join('; ')}`:''}
+${dietaryConstraintsText()}
+${g.mode==='leicht'?'Modus "Leicht & Gut": bevorzuge bewusst leichte, nährstoffreiche, bekömmliche Gerichte – wenig Frittiertes/Sahne/Butter, mehr Gemüse, magere Eiweißquellen, schonende Garmethoden.':''}
 
 Entwickle daraus 5 unterschiedliche Gerichts-KONZEPTE (noch keine vollen Rezepte). Jedes eigenständig, klares Konzept, jedes überrascht auf andere Weise.
 JSON-Schema (halte dich exakt daran, alles auf Deutsch, sehr kompakt):
@@ -1155,7 +1231,8 @@ function cookConcepts(){
   </div>
   <p class="usage-note">${S.pro?'★ Famiglia aktiv – so viele Runden, wie du willst.':`Jede neue Runde zählt: noch ${left} von ${FREE_LIMIT} diese Woche`}</p>`;
 }
-function restartGen(){ S.gen={step:'input',ingredients:S.gen.ingredients,qIndex:0,draft:{},concepts:[],detail:null,wish:'',prevTitles:[],retry:null}; render(); }
+function restartGen(){ S.gen={step:'input',ingredients:S.gen.ingredients,qIndex:0,draft:{},concepts:[],detail:null,wish:'',prevTitles:[],retry:null,mode:S.gen.mode||'frei',photoState:'idle',photoErrorMsg:''}; render(); }
+function setGenMode(m){ S.gen.mode=m; render(); }
 function regenerate(){ S.gen.wish=''; generateConcepts(); }
 function regenerateWithWish(){ const w=el('wishInput'); S.gen.wish = w?w.value.trim():''; generateConcepts(); }
 function backToConcepts(){ S.gen.step='concepts'; render(); }
@@ -1176,6 +1253,7 @@ Konzept: ${k.titel} – ${k.konzept} (${k.dauer}, ${k.schwierigkeit})
 Zutaten des Nutzers: ${g.ingredients.join(', ')}
 Antworten des Nutzers:
 ${answersText(S.answers)}
+${dietaryConstraintsText()}
 
 Arbeite NUR dieses eine Rezept vollständig aus. Kompakt: max. 7 Schritte, jeder Schritt max. 2 Sätze.
 JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
@@ -1186,6 +1264,7 @@ Bei zählbaren Zutaten (Eier, Zehen, Stangen, Dosen …): "einheit":null und die
     data.basisPersonen = parsePersonCount(S.answers); // lokale Nutzerangabe ist die verlässliche Quelle, nicht die Modellantwort
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
     g.detail = data; g.step='detail';
+    await logHistory(data);
     track('recipe_detail_opened', {titel:data.titel});
   }catch(e){ S.lastErr = S.lastErr||e.message; g.step='error'; g.retry=`openDetail(${i})`; }
   render();
@@ -1201,6 +1280,9 @@ function recipeHTML(r, backFn){
     <h1 class="screen" style="font-size:27px">${esc(r.titel)}</h1>
   </div>
   <p class="sub" style="margin-bottom:var(--s4)">${esc(r.konzept||'')}</p>
+  <div class="star-rating" role="group" aria-label="Rezept bewerten">
+    ${[1,2,3,4,5].map(n=>`<button onclick="setRecipeRating(${n})" aria-label="${n} Stern${n===1?'':'e'}" class="${(r.rating||0)>=n?'on':''}">★</button>`).join('')}
+  </div>
   ${r.zutatenanalyse?`<div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">${esc(r.zutatenanalyse)}</div></div>`:''}
   ${r.basisPersonen?`
   <div class="pstepper">
@@ -1225,6 +1307,7 @@ function recipeHTML(r, backFn){
 function getCurrentRecipe(){
   if(S.tab==='cook') return S.gen.detail;
   if(S.tab==='fav') return S.fav.open;
+  if(S.tab==='history') return S.hist.open;
   if(S.tab==='meal') return S.mp.detail;
   return null;
 }
@@ -1252,7 +1335,7 @@ function shareRecipeIngredients(){
   shareOrDownloadText(`Zutaten: ${r.titel}`, recipeIngredientsText(r), `nonna-${safeFilename(r.titel)}.txt`);
 }
 async function toggleFav(){
-  const r = S.tab==='cook' ? S.gen.detail : (S.tab==='fav' ? S.fav.open : S.mp.detail);
+  const r = getCurrentRecipe();
   if(!r) return;
   const idx = S.favs.findIndex(f=>f.titel===r.titel);
   const wasFav = idx>=0;
@@ -1261,6 +1344,72 @@ async function toggleFav(){
   track(wasFav?'favorite_removed':'favorite_added', {titel:r.titel});
   render();
 }
+
+/* ============ REZEPT-HISTORIE + BEWERTUNG (Abschnitte 7+10) ============ */
+async function logHistory(recipe){
+  if(!recipe || !recipe.titel) return;
+  const idx = S.history.findIndex(h=>h.titel===recipe.titel);
+  const prevRating = idx>=0 ? (S.history[idx].rating||0) : 0;
+  if(idx>=0) S.history.splice(idx,1);
+  S.history.unshift({...recipe, viewedAt:Date.now(), rating:prevRating});
+  if(S.history.length>100) S.history.length = 100;
+  await sset('nonna:history', S.history);
+}
+async function setRecipeRating(n){
+  const r = getCurrentRecipe();
+  if(!r) return;
+  r.rating = (r.rating||0)===n ? 0 : n;
+  const idx = S.history.findIndex(h=>h.titel===r.titel);
+  if(idx>=0){ S.history[idx].rating = r.rating; }
+  else { S.history.unshift({...r, viewedAt:Date.now()}); if(S.history.length>100) S.history.length=100; }
+  await sset('nonna:history', S.history);
+  const fidx = S.favs.findIndex(f=>f.titel===r.titel);
+  if(fidx>=0){ S.favs[fidx].rating = r.rating; await sset('nonna:favorites', S.favs); }
+  track('recipe_rated', {titel:r.titel, rating:r.rating});
+  render();
+}
+function applyHistSearch(){
+  const i = el('histSearch');
+  S.hist.q = i ? i.value : '';
+  render();
+}
+function setHistMinStars(n){ S.hist.minStars = n; render(); }
+function viewHistory(){
+  if(S.hist.view==='detail' && S.hist.open) return recipeHTML(S.hist.open,'closeHistDetail()');
+  if(!S.history.length) return `
+    <h1 class="screen">Meine Rezepte</h1>
+    <p class="sub">Was du schon gekocht hast, sammelt sich hier.</p>
+    <div class="empty"><div class="e">📖</div><b>Noch nichts gekocht</b>Sobald du ein Rezept öffnest, taucht es hier auf – zum Nachschlagen und Bewerten.</div>
+    <button class="btn" onclick="goTab('cook')">Zum Rezeptgenerator</button>`;
+  const q = (S.hist.q||'').trim().toLowerCase();
+  const minStars = S.hist.minStars||0;
+  const list = S.history.filter(h=>{
+    if(minStars && (h.rating||0)<minStars) return false;
+    if(q && !(h.titel||'').toLowerCase().includes(q) && !(h.zutaten||[]).some(z=>(z.name||'').toLowerCase().includes(q))) return false;
+    return true;
+  });
+  return `
+  <h1 class="screen">Meine Rezepte</h1>
+  <p class="sub">Was du schon gekocht hast – zum Nachschlagen und Bewerten.</p>
+  <div class="row" style="margin-bottom:var(--s3)">
+    <input class="field" id="histSearch" placeholder="Suche nach Titel oder Zutat …" value="${esc(S.hist.q||'')}" onkeydown="if(event.key==='Enter')applyHistSearch()">
+    <button class="btn ghost" style="padding:10px 16px" onclick="applyHistSearch()">Suchen</button>
+  </div>
+  <div class="seg" style="margin-bottom:var(--s3)">
+    ${[0,3,4,5].map(n=>`<button class="${minStars===n?'on':''}" onclick="setHistMinStars(${n})">${n===0?'Alle':'★'.repeat(n)+'+'}</button>`).join('')}
+  </div>
+  ${!list.length?`<div class="empty"><div class="e">🔎</div><b>Nichts gefunden</b>Versuch eine andere Suche oder Filterung.</div>`:`
+  <div class="concept-grid">
+  ${list.map(h=>`
+    <div class="card concept" onclick="openHistDetail(${S.history.indexOf(h)})">
+      <h3>${esc(h.titel)}</h3>
+      <p>${esc(h.konzept||'')}</p>
+      <div class="meta"><span class="tag">${(h.zutaten||[]).length} Zutaten</span>${h.rating?`<span class="tag w">${'★'.repeat(h.rating)}</span>`:''}</div>
+    </div>`).join('')}
+  </div>`}`;
+}
+function openHistDetail(i){ S.hist.open=S.history[i]; S.hist.view='detail'; render(); }
+function closeHistDetail(){ S.hist.view='list'; S.hist.open=null; render(); }
 
 /* ============ STRANG 2: FAVORITEN ============ */
 function viewFav(){
@@ -1361,6 +1510,7 @@ Vorhandene Zutaten: ${m.ingredients}
 Gesamtzeitraum: ${m.days} Tage mit je ${m.meals} Mahlzeit(en). Plane JETZT NUR Tag ${von} bis Tag ${bis} (Feld "tag" mit diesen absoluten Tagesnummern).
 ${ci>0?`Bereits geplante Gerichte (nicht wiederholen): ${plan.map(x=>x.titel).join('; ')}`:''}
 ${S.answers?`Kontext zum Nutzer:\n${answersText(S.answers)}`:''}
+${dietaryConstraintsText()}
 ${ci===0?`Erstelle zusätzlich eine gebündelte Prep-Session für den GESAMTEN Zeitraum (was wird einmal vorbereitet und mehrfach verwendet).`:'Feld "prepSession" als leeres Array zurückgeben.'}
 Sehr kompakt. JSON-Schema (exakt, Deutsch):
 {"prepSession":["max 5 kurze Punkte"],"plan":[{"tag":${von},"mahlzeit":"Frühstück|Mittag|Abend","titel":"...","kurzbeschreibung":"max 1 Satz","prepHinweis":"max 5 Wörter"}]}`;
@@ -1532,6 +1682,7 @@ async function openMealDetail(i){
 Gericht: ${m.titel} – ${m.kurzbeschreibung||''} (Slot: ${m.mahlzeit}, Prep-Hinweis: ${m.prepHinweis||'-'})
 Verfügbare Zutaten: ${S.mp.ingredients||'wie im Plan'}
 ${S.answers?`Kontext zum Nutzer:\n${answersText(S.answers)}`:''}
+${dietaryConstraintsText()}
 JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
 {"titel":"...","konzept":"1 Satz","zutatenanalyse":"1 Satz","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":["..."],"anrichten":"1 Satz","geschmacksprofil":"1 Satz"}
 Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name".`;
@@ -1540,6 +1691,7 @@ Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name".`;
     data.basisPersonen = parsePersonCount(S.answers);
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
     S.mp.detail = data; S.mp.step='detail';
+    await logHistory(data);
   }catch(e){ S.lastErr = S.lastErr||e.message; S.mp.step='error'; }
   render();
 }
@@ -1833,22 +1985,107 @@ function openPurchaseConfirm(){
     </div>
   </div>`;
 }
+/* ============ EINSTELLUNGEN (Profil-Sheet) ============
+   nonna:profile bündelt Allergien, Alter, Wohnort, Passwort (rein lokal
+   simuliert – siehe Kommentar bei saveProfileText) und die Diät-Grundeinstellung
+   in einem Key statt vieler Einzel-Keys. */
+const ALLERGY_CATEGORIES = ['Gluten','Laktose','Nüsse','Schalenfrüchte','Ei','Soja','Fisch/Meeresfrüchte','Histamin'];
+let _profileEditQ = null; // Index in QUESTIONS, solange eine einzelne Frage granular bearbeitet wird
+
 function openProfile(){
-  const left=usageLeft();
+  _profileEditQ = null;
   el('modal').innerHTML = `
   <div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="sheet">
-      <h2>Profil</h2>
+    <div class="sheet" id="profileSheet">${profileMainHTML()}</div>
+  </div>`;
+}
+function profileMainHTML(){
+  const left=usageLeft();
+  return `
+      <h2>Profil & Einstellungen</h2>
       <div class="toggle"><div><b style="font-size:15px">Nonna Famiglia</b><p style="font-size:13px;color:var(--muted)">Simulierter Mitgliedschaftsstatus (Demo)</p></div>
         <button class="sw ${S.pro?'on':''}" onclick="toggleProSwitch()" aria-label="Pro umschalten"></button></div>
       <div class="toggle"><div><b style="font-size:15px">Konto</b><p style="font-size:13px;color:var(--muted)">${S.account?esc(S.account.name)+' · '+esc(S.account.mail):'Nicht angemeldet'}</p></div>
         ${S.account?'<button class="chip-btn" onclick="logoutAccount()">Abmelden</button>':''}</div>
       <div class="toggle"><div><b style="font-size:15px">Gratis-Runden</b><p style="font-size:13px;color:var(--muted)">${S.pro?'Unbegrenzt mit Pro':S.account?`Noch ${left} von ${FREE_LIMIT} in dieser Woche`:'Anmeldung erforderlich'}</p></div></div>
-      <div class="toggle"><div><b style="font-size:15px">Gespeicherte Antworten</b><p style="font-size:13px;color:var(--muted)">${S.answers?'Werden beim nächsten Kochen vorgeschlagen':'Noch keine – koch einmal, dann merkt Nonna sich alles'}</p></div>
-        ${S.answers?'<button class="chip-btn" onclick="clearAnswers()">Zurücksetzen</button>':''}</div>
-      <button class="btn ghost" style="margin-top:var(--s4)" onclick="closeModal()">Schließen</button>
-    </div>
-  </div>`;
+
+      <div class="sec-label" style="margin-top:var(--s5)">Deine 5 Antworten</div>
+      ${S.answers ? QUESTIONS.map((q,i)=>`
+        <div class="toggle"><div><b style="font-size:14.5px">${esc(Q_SHORT[q.key])}</b><p style="font-size:13px;color:var(--muted)">${esc(S.answers[q.key]||'–')}</p></div>
+          <button class="chip-btn" onclick="editProfileAnswer(${i})">Ändern</button></div>`).join('')
+        : `<p class="sub" style="margin-bottom:0">Noch keine – koch einmal, dann merkt Nonna sich alles.</p>`}
+      ${S.answers?`<button class="btn ghost" style="margin-top:var(--s2)" onclick="clearAnswers()">Alle 5 zurücksetzen</button>`:''}
+
+      <div class="sec-label" style="margin-top:var(--s5)">Allergien & Unverträglichkeiten</div>
+      <div class="chips">
+        ${ALLERGY_CATEGORIES.map(a=>`<button class="chip-btn ${S.profile.allergies.includes(a)?'on':''}" onclick="toggleAllergy('${esc(a)}')">${esc(a)}</button>`).join('')}
+      </div>
+      <input class="field" style="margin-top:var(--s3)" id="profAllergyOther" type="text" placeholder="Weitere, durch Komma getrennt" value="${esc(S.profile.allergiesOther||'')}" onblur="saveProfileText('allergiesOther', this.value)">
+      <p class="usage-note">Nonna übernimmt keine Gewähr für Kreuzkontamination – bei ernsten Allergien bitte zusätzlich selbst prüfen.</p>
+
+      <div class="sec-label">Ernährungsweise</div>
+      <div class="seg">
+        <button class="${S.profile.diet==='keine'?'on':''}" onclick="setDiet('keine')">Keine Einschränkung</button>
+        <button class="${S.profile.diet==='vegetarisch'?'on':''}" onclick="setDiet('vegetarisch')">Vegetarisch</button>
+        <button class="${S.profile.diet==='vegan'?'on':''}" onclick="setDiet('vegan')">Vegan</button>
+      </div>
+
+      <div class="sec-label">Weitere Angaben</div>
+      <input class="field" id="profAge" type="number" min="1" max="120" placeholder="Alter" value="${esc(S.profile.age||'')}" onblur="saveProfileText('age', this.value)">
+      <input class="field" style="margin-top:var(--s2)" id="profLocation" type="text" placeholder="Wohnort" value="${esc(S.profile.location||'')}" onblur="saveProfileText('location', this.value)">
+      <input class="field" style="margin-top:var(--s2)" id="profPassword" type="password" placeholder="Passwort" value="${esc(S.profile.password||'')}" onblur="saveProfileText('password', this.value)">
+      <p class="usage-note">Rein lokal gespeichert, kein echter Sicherheitsmechanismus – Nonna hat kein Backend-Login.</p>
+
+      <button class="btn ghost" style="margin-top:var(--s4)" onclick="closeModal()">Schließen</button>`;
+}
+function refreshProfileSheet(){ const sh=el('profileSheet'); if(sh) sh.innerHTML = _profileEditQ!==null ? profileEditAnswerHTML() : profileMainHTML(); }
+async function toggleAllergy(cat){
+  const i = S.profile.allergies.indexOf(cat);
+  if(i>=0) S.profile.allergies.splice(i,1); else S.profile.allergies.push(cat);
+  await sset('nonna:profile', S.profile);
+  refreshProfileSheet();
+}
+async function setDiet(v){ S.profile.diet=v; await sset('nonna:profile', S.profile); refreshProfileSheet(); }
+async function saveProfileText(key,val){
+  /* Hinweis: 'password' ist ein reines Freitextfeld ohne Hashing/Session – rein lokale
+     Simulation des Account-Konzepts, KEIN echter Auth-Mechanismus. */
+  S.profile[key] = (val||'').trim();
+  await sset('nonna:profile', S.profile);
+}
+function editProfileAnswer(i){ _profileEditQ=i; refreshProfileSheet(); }
+function profileEditAnswerHTML(){
+  const q = QUESTIONS[_profileEditQ];
+  const cur = S.answers?.[q.key];
+  return `
+      <button class="back" style="margin-bottom:var(--s3)" onclick="_profileEditQ=null;refreshProfileSheet()">← Zurück zum Profil</button>
+      <h2 style="font-size:20px">${esc(q.q)}</h2>
+      <div class="opts">
+        ${q.opts.map(o=>{
+          const val = o.s ? `${o.t} (${o.s})` : o.t;
+          return `<button class="opt ${cur===val?'sel':''}" onclick="pickProfileAnswer('${q.key}', ${JSON.stringify(val).replace(/"/g,'&quot;')})">
+            <div class="t">${esc(o.t)}</div>${o.s?`<div class="s">${esc(o.s)}</div>`:''}
+          </button>`;
+        }).join('')}
+      </div>`;
+}
+async function pickProfileAnswer(key,val){
+  S.answers = {...(S.answers||{}), [key]:val};
+  await sset('nonna:answers', S.answers);
+  _profileEditQ=null;
+  refreshProfileSheet();
+}
+/* Fasst Allergien/Diät als harte Ausschlussregeln für den System-Prompt zusammen –
+   wird in generateConcepts/openDetail/generateMealplan/openMealDetail angehängt. */
+function dietaryConstraintsText(){
+  const allergyList = [...(S.profile.allergies||[])];
+  if(S.profile.allergiesOther && S.profile.allergiesOther.trim()){
+    allergyList.push(...S.profile.allergiesOther.split(',').map(s=>s.trim()).filter(Boolean));
+  }
+  const parts=[];
+  if(allergyList.length) parts.push(`ALLERGIEN/UNVERTRÄGLICHKEITEN – verwende unter keinen Umständen: ${allergyList.join(', ')}. Das ist eine harte Sicherheitsregel, keine Geschmackspräferenz.`);
+  if(S.profile.diet==='vegan') parts.push('Diät: STRIKT VEGAN – keine tierischen Produkte (kein Fleisch, Fisch, Ei, Milchprodukte, Honig).');
+  else if(S.profile.diet==='vegetarisch') parts.push('Diät: STRIKT VEGETARISCH – kein Fleisch, kein Fisch.');
+  return parts.length ? '\n'+parts.join('\n') : '';
 }
 async function toggleProSwitch(){ S.pro=!S.pro; await sset('nonna:pro',S.pro); openProfile(); render(); }
 async function clearAnswers(){ S.answers=null; await sset('nonna:answers',null); openProfile(); }

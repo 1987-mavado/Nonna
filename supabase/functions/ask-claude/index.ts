@@ -31,7 +31,12 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  let body: { prompt?: string; system?: string; maxTokens?: number };
+  let body: {
+    prompt?: string;
+    system?: string;
+    maxTokens?: number;
+    image?: { media_type?: string; data?: string };
+  };
   try {
     body = await req.json();
   } catch {
@@ -41,12 +46,39 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const { prompt, system, maxTokens } = body;
+  const { prompt, system, maxTokens, image } = body;
   if (!prompt || typeof prompt !== "string") {
     return new Response(JSON.stringify({ error: { message: "Feld 'prompt' fehlt oder ist ungültig." } }), {
       status: 400,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });
+  }
+
+  const ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  let content: string | Array<Record<string, unknown>> = prompt;
+  if (image) {
+    if (
+      typeof image.media_type !== "string" ||
+      !ALLOWED_MEDIA_TYPES.includes(image.media_type) ||
+      typeof image.data !== "string" ||
+      !image.data
+    ) {
+      return new Response(
+        JSON.stringify({ error: { message: "Feld 'image' ist ungültig (media_type/data)." } }),
+        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+      );
+    }
+    // ~10 MB Rohbild-Obergrenze (Base64 ist ca. 1.37x größer als die Rohdaten)
+    if (image.data.length > 14_000_000) {
+      return new Response(JSON.stringify({ error: { message: "Bild ist zu groß." } }), {
+        status: 413,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+    content = [
+      { type: "image", source: { type: "base64", media_type: image.media_type, data: image.data } },
+      { type: "text", text: prompt },
+    ];
   }
 
   try {
@@ -61,7 +93,7 @@ Deno.serve(async (req: Request) => {
         model: "claude-sonnet-4-6",
         max_tokens: maxTokens ?? 1400,
         system,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: "user", content }],
       }),
     });
 
