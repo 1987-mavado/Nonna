@@ -1052,7 +1052,7 @@ function cookInput(){
   <textarea class="field" id="ingInput" rows="2" placeholder="z. B. Hähnchen, Zucchini, Feta …"></textarea>
   <div class="row" style="margin-top:var(--s2)">
     <button class="btn ghost" onclick="addIngredients()">Zutaten hinzufügen</button>
-    <button class="btn ghost" onclick="triggerPhotoIngredients()" ${g.photoState==='loading'?'disabled':''}>📷 Foto${S.pro?'':' 🔒'}</button>
+    <button class="btn ghost" onclick="triggerPhotoIngredients()" ${g.photoState==='loading'?'disabled':''}>📷 Zutaten fotografieren${S.pro?'':' 🔒'}</button>
   </div>
   <input type="file" id="ingPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoIngredients(this)">
   ${g.photoState==='loading'?`<p class="usage-note">Nonna schaut sich das Foto an …</p>`:''}
