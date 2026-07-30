@@ -129,6 +129,12 @@ input.field{height:52px}
 .step{display:flex;gap:var(--s4);margin-bottom:var(--s4)}
 .step .n{flex:0 0 30px;height:30px;border-radius:50%;background:var(--blue-700);color:#fff;font-family:var(--display);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
 .step p{font-size:14.5px;line-height:1.55;padding-top:4px}
+.step-body{flex:1;min-width:0}
+.step-timer{display:flex;align-items:center;gap:var(--s2);margin-top:8px}
+.step-timer .t-disp{font-family:var(--display);font-weight:700;font-size:15px;min-width:44px;color:var(--blue-700)}
+.step-timer.running .t-disp{color:var(--warm-dark,#966A22)}
+.step-timer .t-btn{width:30px;height:30px;flex:0 0 30px;border-radius:50%;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;color:var(--blue-700)}
+.stove-ic{font-size:13px}
 /* Tabbar */
 nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:760px;background:rgba(247,250,253,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;padding:var(--s2) var(--s2) calc(10px + env(safe-area-inset-bottom));z-index:30}
 nav button{flex:1;border:0;background:none;cursor:pointer;font-family:var(--body);font-size:11px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:12px}
@@ -274,13 +280,17 @@ nav button .lock-mini{font-size:9px;color:var(--warm)}
 /* ============ STATE ============ */
 const S = {
   tab:'cook', pro:false, usage:[], favs:[], history:[], answers:null, mealplan:null, account:null,
-  profile:{allergies:[], allergiesOther:'', age:'', location:'', password:'', diet:'keine'},
+  profile:{allergies:[], allergiesOther:'', age:'', location:'', password:'', diet:'keine',
+    kitchenStaples:['Öl','Butter','Zucker','Essig','Zitrone','Wasser','Fond'], spices:['Salz','Pfeffer']},
   school:{completed:[],cache:{}},
-  gen:{step:'input', ingredients:[], qIndex:0, draft:{}, concepts:[], detail:null, wish:'', prevTitles:[], retry:null, mode:'frei', photoState:'idle', photoErrorMsg:''},
+  gen:{step:'input', ingredients:[], qIndex:0, draft:{}, concepts:[], detail:null, wish:'', prevTitles:[], retry:null, photoState:'idle', photoErrorMsg:''},
   mp:{step:'idle', ingredients:'', days:5, meals:2, view:'plan', detail:null, startDate:null, calMonth:null},
   sc:{view:'path', level:'mittel', lessonIdx:null, lesson:null, phase:'intro', quizIdx:0, quizAnswered:null, correct:0, showShopping:false},
   fav:{view:'list', open:null},
   hist:{view:'list', open:null, q:'', minStars:0},
+  timers:{},
+  tts:{active:false, stepIndex:0},
+  visits:0, onboarding:{popup0:false, popup1:false, popup2:false, popup3:false},
   loadTimer:null, lastErr:null
 };
 const FREE_LIMIT = 2;
@@ -789,10 +799,10 @@ async function sset(key,val){
 }
 
 async function loadAll(){
-  const [pro,usage,favs,history,answers,mealplan,school,account,schoolLevel,profile] = await Promise.all([
+  const [pro,usage,favs,history,answers,mealplan,school,account,schoolLevel,profile,onboarding,visits] = await Promise.all([
     sget('nonna:pro'), sget('nonna:usage'), sget('nonna:favorites'), sget('nonna:history'),
     sget('nonna:answers'), sget('nonna:mealplan'), sget('nonna:school'), sget('nonna:account'), sget('nonna:schoolLevel'),
-    sget('nonna:profile')
+    sget('nonna:profile'), sget('nonna:onboarding'), sget('nonna:visits')
   ]);
   S.pro = !!pro;
   S.usage = Array.isArray(usage)?usage:[];
@@ -804,12 +814,24 @@ async function loadAll(){
   if(profile) S.profile = {...S.profile, ...profile};
   if(school) S.school = school;
   if(schoolLevel) S.sc.level = schoolLevel;
+  if(onboarding){
+    S.onboarding = {...S.onboarding, ...onboarding};
+  } else {
+    /* Allererster Lauf dieses Updates auf diesem Gerät: Bestandsnutzer, die schon vorher
+       ein Profil gespeichert hatten (also bereits unter Einstellungen aktiv waren), werden
+       von den Pop-ups 1-3 dauerhaft ausgenommen. */
+    const wasExistingSettingsUser = profile !== null;
+    S.onboarding = {popup0:false, popup1:wasExistingSettingsUser, popup2:wasExistingSettingsUser, popup3:wasExistingSettingsUser};
+    await sset('nonna:onboarding', S.onboarding);
+  }
+  S.visits = (typeof visits==='number' ? visits : 0) + 1;
+  await sset('nonna:visits', S.visits);
 }
 
 /* ============ API ============ */
 const SYSTEM_CHEF = `Du agierst als Spitzenkoch und Wettbewerbs-Finalist – bekannt für kulinarische Kreativität, handwerkliche Perfektion und exzellentes Gespür für Geschmack, Textur und Balance.
 Harte Regeln:
-- Arbeite ausschließlich mit den übergebenen Zutaten. Kreative Freiheit hast du nur bei Gewürzen, Kräutern und Grundzutaten wie Öl/Salz/Pfeffer/Butter/Zitrone/Essig/Fonds/Wasser/Zucker.
+- Arbeite ausschließlich mit den übergebenen Zutaten. Kreative Freiheit hast du nur bei Gewürzen, Kräutern und den im Prompt explizit als "vorhanden" genannten Grundzutaten aus dem Küchenschrank des Nutzers.
 - Berücksichtige die Angaben des Nutzers (handwerkliches Geschick, Küchenstil, Ausstattung, Zeit, Personenzahl) strikt.
 - Falls im Nutzer-Prompt Allergien/Unverträglichkeiten oder eine Diät (vegan/vegetarisch) angegeben sind: das sind harte Sicherheitsregeln, keine Geschmackspräferenzen – sie stehen über allem anderen, auch über der Zutatenliste des Nutzers.
 - Gerichte dürfen überraschen und müssen keine existierenden Klassiker sein. Jedes Gericht ist eigenständig mit klarem Konzept.
@@ -839,6 +861,17 @@ function parsePersonCount(answers){
   const m = /(\d+)\s*Person/i.exec((answers||{}).personen||'');
   const n = m ? parseInt(m[1],10) : 2;
   return (n>=1) ? n : 2;
+}
+/* Normalisiert einen Kochschritt auf {text, timer_seconds, requires_stove}.
+   Ältere gespeicherte Rezepte (Favoriten/Historie) haben schritte noch als reinen String. */
+function normalizeStep(s){
+  if(typeof s==='string') return {text:s, timer_seconds:null, requires_stove:false};
+  const timer = Number(s && s.timer_seconds);
+  return {
+    text: (s && s.text) || '',
+    timer_seconds: (timer>0) ? Math.round(timer) : null,
+    requires_stove: !!(s && s.requires_stove)
+  };
 }
 function roundToStep(n, step){ return Math.round(n/step)*step; }
 function scaleMenge(menge, einheit, faktor){
@@ -989,7 +1022,7 @@ function errHTML(retryFn){
 /* ============ RENDER: ROOT ============ */
 function render(){
   stopLoader();
-  el('proBadge').textContent = S.pro ? '★ Famiglia' : 'Profil';
+  el('proBadge').textContent = (S.pro ? 'Famiglia' : 'Amico') + ' ⚙️';
   el('proBadge').className = 'chip-btn'+(S.pro?' pro-on':'');
   renderTabbar();
   renderHeaderHeart();
@@ -1048,7 +1081,7 @@ function cookInput(){
   return `
   <h1 class="screen" style="font-size:clamp(17px,5.4vw,26px);white-space:nowrap;margin-bottom:var(--s5)">Was hast du denn da, mein Schatz?</h1>
   <div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">Kühlschrank auf, alles auf den Tisch. Ich mach was draus – versprochen.</div></div>
-  <p class="sub" style="font-size:13.5px;margin-bottom:var(--s3)">Öl, Salz, Pfeffer, Butter, Zucker, Essig, Zitrone, Wasser und ein Fond gelten bei Nonna als vorhanden – die musst du nicht extra eintragen. Alles andere, auch Gewürze und Kräuter, bitte unten dazuschreiben.</p>
+  <p class="sub" style="font-size:13.5px;margin-bottom:var(--s3)">${esc([...S.profile.kitchenStaples, ...S.profile.spices].join(', '))} gelten bei Nonna als vorhanden – die musst du nicht extra eintragen (änderbar unter ⚙️ → Küchenschrank). Alles andere bitte unten dazuschreiben.</p>
   <textarea class="field" id="ingInput" rows="2" placeholder="z. B. Hähnchen, Zucchini, Feta …"></textarea>
   <div class="row" style="margin-top:var(--s2)">
     <button class="btn ghost" onclick="addIngredients()">Zutaten hinzufügen</button>
@@ -1059,11 +1092,7 @@ function cookInput(){
   ${g.photoState==='error'?`<p class="usage-note" style="color:var(--bad)">${esc(g.photoErrorMsg||'Foto konnte nicht ausgewertet werden.')}</p>`:''}
   <div class="chips">${g.ingredients.map((z,i)=>`<span class="chip">${esc(z)}<button onclick="removeIng(${i})" aria-label="Entfernen">✕</button></span>`).join('')}</div>
   ${g.ingredients.length===1?`<p class="usage-note" style="color:var(--bad)">Mit nur einer Zutat wird's dünn – gib mir noch mindestens eine dazu.</p>`:''}
-  <div class="seg" style="margin-top:var(--s3)">
-    <button class="${(g.mode||'frei')==='frei'?'on':''}" onclick="setGenMode('frei')">Alles erlaubt</button>
-    <button class="${g.mode==='leicht'?'on':''}" onclick="setGenMode('leicht')">Leicht &amp; Gut</button>
-  </div>
-  <button class="btn" style="margin-top:var(--s2)" ${g.ingredients.length<2?'disabled':''} onclick="startQuestions()">Weiter ${g.ingredients.length<2?'(mind. 2 Zutaten)':''}</button>
+  <button class="btn" style="margin-top:var(--s3)" ${g.ingredients.length<2?'disabled':''} onclick="startQuestions()">Weiter ${g.ingredients.length<2?'(mind. 2 Zutaten)':''}</button>
   <p class="usage-note">${S.pro?'★ Famiglia aktiv':S.account?`Noch ${left} von ${FREE_LIMIT} Gratis-Runden diese Woche`:'Kostenlos anmelden und 2 Rezeptrunden pro Woche sichern.'}</p>`;
 }
 function addIngredients(){
@@ -1185,12 +1214,12 @@ Antworten des Nutzers:
 ${answersText(g.draft)}
 ${g.wish?`Zusätzlicher Wunsch des Nutzers: ${g.wish}`:''}
 ${g.prevTitles.length?`Diese Konzepte hatte er schon – schlage bewusst ANDERE Richtungen vor: ${g.prevTitles.join('; ')}`:''}
-${dietaryConstraintsText()}
-${g.mode==='leicht'?'Modus "Leicht & Gut": bevorzuge bewusst leichte, nährstoffreiche, bekömmliche Gerichte – wenig Frittiertes/Sahne/Butter, mehr Gemüse, magere Eiweißquellen, schonende Garmethoden.':''}
+${dietaryConstraintsText()}${kitchenStaplesText()}${preferenceProfileText()}
 
 Entwickle daraus 5 unterschiedliche Gerichts-KONZEPTE (noch keine vollen Rezepte). Jedes eigenständig, klares Konzept, jedes überrascht auf andere Weise.
+Falls eine Zutat des Nutzers wegen Diät/Allergie nicht verwendet werden kann: lass sie im Konzept weg/ersetze sie sinnvoll und nenne das kurz im Feld "ersetzt" (sonst leerer String).
 JSON-Schema (halte dich exakt daran, alles auf Deutsch, sehr kompakt):
-{"konzepte":[{"titel":"...","konzept":"1 knapper Satz, max. 10 Wörter","geschmacksprofil":"1 knapper Satz, max. 10 Wörter, Kern von Balance/Textur/Aroma","dauer":"z.B. 30 Min","schwierigkeit":"Einfach|Mittel|Anspruchsvoll"}]}`;
+{"konzepte":[{"titel":"...","konzept":"1 knapper Satz, max. 10 Wörter","geschmacksprofil":"1 knapper Satz, max. 10 Wörter, Kern von Balance/Textur/Aroma","dauer":"z.B. 30 Min","schwierigkeit":"Einfach|Mittel|Anspruchsvoll","ersetzt":"kurzer Hinweis oder leerer String","ausreisser":false}]}`;
     const data = await askClaude(prompt);
     if(!data.konzepte || !data.konzepte.length) throw new Error('Schema: "konzepte" fehlt');
     if(!S.pro) await consumeUsage();
@@ -1221,7 +1250,8 @@ function cookConcepts(){
       <h3>${esc(k.titel)}</h3>
       <p>${esc(k.konzept)}</p>
       <div class="taste">${esc(k.geschmacksprofil)}</div>
-      <div class="meta"><span class="tag">⏱ ${esc(k.dauer)}</span><span class="tag w">${esc(k.schwierigkeit)}</span></div>
+      <div class="meta"><span class="tag">⏱ ${esc(k.dauer)}</span><span class="tag w">${esc(k.schwierigkeit)}</span>${k.ausreisser?`<span class="tag w">✨ Anders als sonst</span>`:''}</div>
+      ${k.ersetzt?`<p class="usage-note" style="text-align:left;margin-top:var(--s2);color:var(--warm-dark,#966A22)">🔄 ${esc(k.ersetzt)}</p>`:''}
     </div>`).join('')}
   </div>
   <div class="sec-label">Nichts dabei?</div>
@@ -1232,8 +1262,7 @@ function cookConcepts(){
   </div>
   <p class="usage-note">${S.pro?'★ Famiglia aktiv – so viele Runden, wie du willst.':`Jede neue Runde zählt: noch ${left} von ${FREE_LIMIT} diese Woche`}</p>`;
 }
-function restartGen(){ S.gen={step:'input',ingredients:S.gen.ingredients,qIndex:0,draft:{},concepts:[],detail:null,wish:'',prevTitles:[],retry:null,mode:S.gen.mode||'frei',photoState:'idle',photoErrorMsg:''}; render(); }
-function setGenMode(m){ S.gen.mode=m; render(); }
+function restartGen(){ S.gen={step:'input',ingredients:S.gen.ingredients,qIndex:0,draft:{},concepts:[],detail:null,wish:'',prevTitles:[],retry:null,photoState:'idle',photoErrorMsg:''}; render(); }
 function regenerate(){ S.gen.wish=''; generateConcepts(); }
 function regenerateWithWish(){ const w=el('wishInput'); S.gen.wish = w?w.value.trim():''; generateConcepts(); }
 function backToConcepts(){ S.gen.step='concepts'; render(); }
@@ -1254,21 +1283,177 @@ Konzept: ${k.titel} – ${k.konzept} (${k.dauer}, ${k.schwierigkeit})
 Zutaten des Nutzers: ${g.ingredients.join(', ')}
 Antworten des Nutzers:
 ${answersText(S.answers)}
-${dietaryConstraintsText()}
+${dietaryConstraintsText()}${kitchenStaplesText()}
 
 Arbeite NUR dieses eine Rezept vollständig aus. Kompakt: max. 7 Schritte, jeder Schritt max. 2 Sätze.
 JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
-{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1-2 Sätze","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":["..."],"anrichten":"1-2 Sätze","geschmacksprofil":"1-2 Sätze"}
-Bei zählbaren Zutaten (Eier, Zehen, Stangen, Dosen …): "einheit":null und die Zähleinheit steckt im "name" (z. B. "große Eier" statt Name "Ei" + Einheit "Stück").`;
+{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1-2 Sätze","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1-2 Sätze","geschmacksprofil":"1-2 Sätze"}
+Bei zählbaren Zutaten (Eier, Zehen, Stangen, Dosen …): "einheit":null und die Zähleinheit steckt im "name" (z. B. "große Eier" statt Name "Ei" + Einheit "Stück").
+Pro Schritt: "timer_seconds" nur setzen, wenn der Schritt eine konkrete Zeitdauer hat (z. B. köcheln, backen, ruhen) – sonst null. "requires_stove":true nur, wenn der Schritt am Herd/Ofen aktiv beaufsichtigt werden muss.`;
     const data = await askClaude(prompt, SYSTEM_CHEF, 1600);
     if(!data.titel || !data.schritte) throw new Error('Schema: Rezeptfelder fehlen');
     data.basisPersonen = parsePersonCount(S.answers); // lokale Nutzerangabe ist die verlässliche Quelle, nicht die Modellantwort
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
+    data.schritte = (data.schritte||[]).map(normalizeStep);
     g.detail = data; g.step='detail';
     await logHistory(data);
     track('recipe_detail_opened', {titel:data.titel});
   }catch(e){ S.lastErr = S.lastErr||e.message; g.step='error'; g.retry=`openDetail(${i})`; }
   render();
+}
+
+/* ============ TIMER PRO KOCHSCHRITT + WAKE LOCK (Abschnitt 1) ============ */
+let _timerTick = null;
+let _wakeLock = null;
+function timerKeyFor(i){
+  const r = getCurrentRecipe();
+  return (r && r.titel ? r.titel : 'x') + '::' + i;
+}
+function fmtTimer(sec){
+  sec = Math.max(0, Math.round(sec));
+  const m = Math.floor(sec/60), s = sec%60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+function anyTimerRunning(){ return Object.values(S.timers).some(t=>t.running); }
+function ensureTimer(key, duration){
+  if(!S.timers[key]) S.timers[key] = {remaining:duration, duration, running:false};
+  return S.timers[key];
+}
+function updateTimerDOM(i){
+  const key = timerKeyFor(i);
+  const t = S.timers[key]; if(!t) return;
+  const disp = el('timerDisp-'+i); if(disp) disp.textContent = fmtTimer(t.remaining);
+  const btn = el('timerToggle-'+i); if(btn) btn.textContent = t.running ? '⏸' : '▶';
+  const wrap = el('timerWrap-'+i); if(wrap) wrap.classList.toggle('running', t.running);
+}
+function startTimerTick(){
+  if(_timerTick) return;
+  _timerTick = setInterval(()=>{
+    const r = getCurrentRecipe();
+    const curTitel = (r && r.titel) ? r.titel : 'x';
+    for(const key in S.timers){
+      const t = S.timers[key];
+      if(!t.running) continue;
+      t.remaining = Math.max(0, t.remaining-1);
+      if(t.remaining===0){ t.running=false; onTimerDone(); }
+      if(key.startsWith(curTitel+'::')) updateTimerDOM(Number(key.slice((curTitel+'::').length)));
+    }
+    if(!anyTimerRunning()){ clearInterval(_timerTick); _timerTick=null; }
+    updateWakeLock();
+  }, 1000);
+}
+function toggleStepTimer(i, duration){
+  const key = timerKeyFor(i);
+  const t = ensureTimer(key, duration);
+  t.running = !t.running;
+  if(t.running){ requestNotificationPermission(); startTimerTick(); }
+  updateTimerDOM(i);
+  updateWakeLock();
+}
+function resetStepTimer(i, duration){
+  const key = timerKeyFor(i);
+  const t = ensureTimer(key, duration);
+  t.running = false; t.remaining = duration;
+  updateTimerDOM(i);
+  updateWakeLock();
+}
+function onTimerDone(){ playTimerSound(); notifyTimerDone(); }
+function playTimerSound(){
+  try{
+    const Ctx = window.AudioContext||window.webkitAudioContext;
+    if(!Ctx) return;
+    const ctx = new Ctx();
+    [0,260,520].forEach(delay=>{
+      setTimeout(()=>{
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type='sine'; o.frequency.value=880; g.gain.value=0.18;
+        o.start(); o.stop(ctx.currentTime+0.18);
+      }, delay);
+    });
+    setTimeout(()=>ctx.close(), 900);
+  }catch(e){}
+}
+function requestNotificationPermission(){
+  if('Notification' in window && Notification.permission==='default') Notification.requestPermission().catch(()=>{});
+}
+function notifyTimerDone(){
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  try{ new Notification('Nonna', {body:'⏱ Timer fertig – weiter geht\'s!'}); }catch(e){}
+}
+async function updateWakeLock(){
+  const running = anyTimerRunning();
+  if(running && !_wakeLock && 'wakeLock' in navigator){
+    try{
+      _wakeLock = await navigator.wakeLock.request('screen');
+      _wakeLock.addEventListener('release', ()=>{ _wakeLock=null; });
+    }catch(e){}
+  } else if(!running && _wakeLock){
+    try{ await _wakeLock.release(); }catch(e){}
+    _wakeLock = null;
+  }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && anyTimerRunning() && !_wakeLock) updateWakeLock();
+});
+
+/* ============ VORLESEFUNKTION (Abschnitt 3, native speechSynthesis) ============ */
+function startReadAloud(){
+  const r = getCurrentRecipe();
+  if(!r || !(r.schritte||[]).length) return;
+  S.tts = {active:true, stepIndex:0};
+  renderReadAloud();
+  speakCurrentStep();
+}
+function renderReadAloud(){
+  const r = getCurrentRecipe();
+  const steps = (r.schritte||[]).map(normalizeStep);
+  const i = S.tts.stepIndex;
+  const step = steps[i];
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeReadAloud()">
+    <div class="sheet" style="text-align:center">
+      <p class="usage-note" style="margin-top:0">Schritt ${i+1} von ${steps.length}</p>
+      <p style="font-size:19px;line-height:1.5;font-family:var(--display);font-weight:600;margin:var(--s3) 0 var(--s4)">${esc(step.text)}</p>
+      <div class="row" style="margin-bottom:var(--s3)">
+        <button class="btn ghost" ${i<=0?'disabled':''} onclick="ttsPrevStep()">← Zurück</button>
+        <button class="btn ghost" onclick="speakCurrentStep()">🔁 Nochmal vorlesen</button>
+      </div>
+      <button class="btn" onclick="ttsNextStep()">${i<steps.length-1?'Weiter →':'Fertig'}</button>
+      <button class="btn ghost" style="margin-top:var(--s2)" onclick="closeReadAloud()">Schließen</button>
+      ${('speechSynthesis' in window)?'':'<p class="usage-note">Dieses Gerät unterstützt keine Sprachausgabe – die Schritte werden nur angezeigt.</p>'}
+    </div>
+  </div>`;
+}
+function speakCurrentStep(){
+  if(!('speechSynthesis' in window)) return;
+  const r = getCurrentRecipe();
+  const steps = (r.schritte||[]).map(normalizeStep);
+  const step = steps[S.tts.stepIndex];
+  if(!step) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(step.text);
+  u.lang = 'de-DE';
+  window.speechSynthesis.speak(u);
+}
+function ttsNextStep(){
+  const r = getCurrentRecipe();
+  const steps = (r.schritte||[]).map(normalizeStep);
+  if(S.tts.stepIndex >= steps.length-1){ closeReadAloud(); return; }
+  S.tts.stepIndex++;
+  renderReadAloud();
+  speakCurrentStep();
+}
+function ttsPrevStep(){
+  if(S.tts.stepIndex<=0) return;
+  S.tts.stepIndex--;
+  renderReadAloud();
+  speakCurrentStep();
+}
+function closeReadAloud(){
+  if('speechSynthesis' in window) window.speechSynthesis.cancel();
+  S.tts = {active:false, stepIndex:0};
+  closeModal();
 }
 
 /* Rezept-Detailansicht */
@@ -1299,8 +1484,26 @@ function recipeHTML(r, backFn){
     <button class="btn ghost" style="font-size:13px;padding:10px" onclick="downloadRecipeIngredients()">⬇︎ Zutaten herunterladen</button>
     <button class="btn ghost" style="font-size:13px;padding:10px" onclick="shareRecipeIngredients()">↗ Teilen</button>
   </div>
-  <div class="sec-label">Zubereitung</div>
-  ${(r.schritte||[]).map((s,i)=>`<div class="step"><div class="n">${i+1}</div><p>${esc(s)}</p></div>`).join('')}
+  <div class="sec-label" style="display:flex;align-items:center;justify-content:space-between;gap:var(--s2)">Zubereitung${(r.schritte||[]).length?`<button class="chip-btn" style="text-transform:none;letter-spacing:normal" onclick="startReadAloud()">🔊 Vorlesen</button>`:''}</div>
+  ${(r.schritte||[]).map((s,i)=>{
+    const step = normalizeStep(s);
+    const key = timerKeyFor(i);
+    const t = S.timers[key];
+    const remaining = t ? t.remaining : step.timer_seconds;
+    const running = t ? t.running : false;
+    return `<div class="step">
+      <div class="n">${i+1}</div>
+      <div class="step-body">
+        <p>${esc(step.text)}${step.requires_stove?' <span class="stove-ic" title="Am Herd/Ofen">🔥</span>':''}</p>
+        ${step.timer_seconds?`
+        <div class="step-timer" id="timerWrap-${i}">
+          <span class="t-disp" id="timerDisp-${i}">${fmtTimer(remaining)}</span>
+          <button class="t-btn" onclick="toggleStepTimer(${i},${step.timer_seconds})" id="timerToggle-${i}" aria-label="Timer starten/pausieren">${running?'⏸':'▶'}</button>
+          <button class="t-btn" onclick="resetStepTimer(${i},${step.timer_seconds})" aria-label="Timer zurücksetzen">↺</button>
+        </div>`:''}
+      </div>
+    </div>`;
+  }).join('')}
   ${r.anrichten?`<div class="sec-label">Anrichten</div><div class="card"><p style="font-size:14.5px;line-height:1.55">${esc(r.anrichten)}</p></div>`:''}
   ${r.geschmacksprofil?`<div class="sec-label">Warum es schmeckt</div><p style="font-size:14.5px;line-height:1.55;color:var(--muted)">${esc(r.geschmacksprofil)}</p>`:''}
   <div style="height:var(--s5)"></div>`;
@@ -1310,6 +1513,7 @@ function getCurrentRecipe(){
   if(S.tab==='fav') return S.fav.open;
   if(S.tab==='history') return S.hist.open;
   if(S.tab==='meal') return S.mp.detail;
+  if(S.tab==='school') return S.sc.lesson ? S.sc.lesson.praxisrezept : null;
   return null;
 }
 function changeRecipePersonen(delta){
@@ -1511,7 +1715,7 @@ Vorhandene Zutaten: ${m.ingredients}
 Gesamtzeitraum: ${m.days} Tage mit je ${m.meals} Mahlzeit(en). Plane JETZT NUR Tag ${von} bis Tag ${bis} (Feld "tag" mit diesen absoluten Tagesnummern).
 ${ci>0?`Bereits geplante Gerichte (nicht wiederholen): ${plan.map(x=>x.titel).join('; ')}`:''}
 ${S.answers?`Kontext zum Nutzer:\n${answersText(S.answers)}`:''}
-${dietaryConstraintsText()}
+${dietaryConstraintsText()}${kitchenStaplesText()}
 ${ci===0?`Erstelle zusätzlich eine gebündelte Prep-Session für den GESAMTEN Zeitraum (was wird einmal vorbereitet und mehrfach verwendet).`:'Feld "prepSession" als leeres Array zurückgeben.'}
 Sehr kompakt. JSON-Schema (exakt, Deutsch):
 {"prepSession":["max 5 kurze Punkte"],"plan":[{"tag":${von},"mahlzeit":"Frühstück|Mittag|Abend","titel":"...","kurzbeschreibung":"max 1 Satz","prepHinweis":"max 5 Wörter"}]}`;
@@ -1683,14 +1887,15 @@ async function openMealDetail(i){
 Gericht: ${m.titel} – ${m.kurzbeschreibung||''} (Slot: ${m.mahlzeit}, Prep-Hinweis: ${m.prepHinweis||'-'})
 Verfügbare Zutaten: ${S.mp.ingredients||'wie im Plan'}
 ${S.answers?`Kontext zum Nutzer:\n${answersText(S.answers)}`:''}
-${dietaryConstraintsText()}
+${dietaryConstraintsText()}${kitchenStaplesText()}
 JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
-{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1 Satz","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":["..."],"anrichten":"1 Satz","geschmacksprofil":"1 Satz"}
-Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name".`;
+{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1 Satz","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1 Satz","geschmacksprofil":"1 Satz"}
+Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name". Pro Schritt: "timer_seconds" nur bei konkreter Zeitdauer, sonst null. "requires_stove":true nur bei aktiver Beaufsichtigung am Herd/Ofen.`;
     const data = await askClaude(prompt, SYSTEM_CHEF, 1600);
     if(!data.titel) throw new Error('Schema: Rezeptfelder fehlen');
     data.basisPersonen = parsePersonCount(S.answers);
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
+    data.schritte = (data.schritte||[]).map(normalizeStep);
     S.mp.detail = data; S.mp.step='detail';
     await logHistory(data);
   }catch(e){ S.lastErr = S.lastErr||e.message; S.mp.step='error'; }
@@ -1845,8 +2050,26 @@ function recipeCore(r){
     <button class="btn ghost" style="font-size:13px;padding:10px" onclick="downloadLessonIngredients()">⬇︎ Zutaten herunterladen</button>
     <button class="btn ghost" style="font-size:13px;padding:10px" onclick="shareLessonIngredients()">↗ Teilen</button>
   </div>
-  <div class="sec-label">Zubereitung</div>
-  ${(r.schritte||[]).map((s,i)=>`<div class="step"><div class="n">${i+1}</div><p>${esc(s)}</p></div>`).join('')}
+  <div class="sec-label" style="display:flex;align-items:center;justify-content:space-between;gap:var(--s2)">Zubereitung${(r.schritte||[]).length?`<button class="chip-btn" style="text-transform:none;letter-spacing:normal" onclick="startReadAloud()">🔊 Vorlesen</button>`:''}</div>
+  ${(r.schritte||[]).map((s,i)=>{
+    const step = normalizeStep(s);
+    const key = timerKeyFor(i);
+    const t = S.timers[key];
+    const remaining = t ? t.remaining : step.timer_seconds;
+    const running = t ? t.running : false;
+    return `<div class="step">
+      <div class="n">${i+1}</div>
+      <div class="step-body">
+        <p>${esc(step.text)}${step.requires_stove?' <span class="stove-ic" title="Am Herd/Ofen">🔥</span>':''}</p>
+        ${step.timer_seconds?`
+        <div class="step-timer" id="timerWrap-${i}">
+          <span class="t-disp" id="timerDisp-${i}">${fmtTimer(remaining)}</span>
+          <button class="t-btn" onclick="toggleStepTimer(${i},${step.timer_seconds})" id="timerToggle-${i}" aria-label="Timer starten/pausieren">${running?'⏸':'▶'}</button>
+          <button class="t-btn" onclick="resetStepTimer(${i},${step.timer_seconds})" aria-label="Timer zurücksetzen">↺</button>
+        </div>`:''}
+      </div>
+    </div>`;
+  }).join('')}
   ${r.anrichten?`<div class="sec-label">Anrichten</div><div class="card" style="margin-bottom:var(--s4)"><p style="font-size:14.5px;line-height:1.55">${esc(r.anrichten)}</p></div>`:''}`;
 }
 function startQuiz(){ S.sc.phase='quiz'; S.sc.quizIdx=0; S.sc.quizAnswered=null; S.sc.correct=0; render(); }
@@ -2031,7 +2254,27 @@ function profileMainHTML(){
         <button class="${S.profile.diet==='vegan'?'on':''}" onclick="setDiet('vegan')">Vegan</button>
       </div>
 
-      <div class="sec-label">Weitere Angaben</div>
+      <div class="sec-label">Küchenschrank</div>
+      <p class="sub" style="margin-bottom:var(--s2)">Diese Grundzutaten gelten bei jedem Rezept als vorhanden – du musst sie nie eintragen.</p>
+      <div class="chips">
+        ${S.profile.kitchenStaples.map((z,i)=>`<span class="chip">${esc(z)}<button onclick="removeKitchenStaple(${i})" aria-label="Entfernen">✕</button></span>`).join('')}
+      </div>
+      <div class="row" style="margin-top:var(--s2)">
+        <input class="field" id="staplesInput" type="text" placeholder="z. B. Sojasauce" onkeydown="if(event.key==='Enter'){event.preventDefault();addKitchenStapleFromInput();}">
+        <button class="btn ghost" style="padding:10px 16px" onclick="addKitchenStapleFromInput()">Hinzufügen</button>
+      </div>
+
+      <div class="sec-label" style="margin-top:var(--s5)">Gewürze</div>
+      <p class="sub" style="margin-bottom:var(--s2)">Genauso: diese Gewürze setzt Nonna immer voraus.</p>
+      <div class="chips">
+        ${S.profile.spices.map((z,i)=>`<span class="chip">${esc(z)}<button onclick="removeSpice(${i})" aria-label="Entfernen">✕</button></span>`).join('')}
+      </div>
+      <div class="row" style="margin-top:var(--s2)">
+        <input class="field" id="spicesInput" type="text" placeholder="z. B. Paprikapulver" onkeydown="if(event.key==='Enter'){event.preventDefault();addSpiceFromInput();}">
+        <button class="btn ghost" style="padding:10px 16px" onclick="addSpiceFromInput()">Hinzufügen</button>
+      </div>
+
+      <div class="sec-label" style="margin-top:var(--s5)">Weitere Angaben</div>
       <input class="field" id="profAge" type="number" min="1" max="120" placeholder="Alter" value="${esc(S.profile.age||'')}" onblur="saveProfileText('age', this.value)">
       <input class="field" style="margin-top:var(--s2)" id="profLocation" type="text" placeholder="Wohnort" value="${esc(S.profile.location||'')}" onblur="saveProfileText('location', this.value)">
       <input class="field" style="margin-top:var(--s2)" id="profPassword" type="password" placeholder="Passwort" value="${esc(S.profile.password||'')}" onblur="saveProfileText('password', this.value)">
@@ -2047,6 +2290,22 @@ async function toggleAllergy(cat){
   refreshProfileSheet();
 }
 async function setDiet(v){ S.profile.diet=v; await sset('nonna:profile', S.profile); refreshProfileSheet(); }
+async function addKitchenStaple(v){
+  const parts = (v||'').split(/[,\n;]+/).map(s=>s.trim()).filter(Boolean);
+  for(const p of parts){ if(!S.profile.kitchenStaples.some(x=>x.toLowerCase()===p.toLowerCase())) S.profile.kitchenStaples.push(p); }
+  await sset('nonna:profile', S.profile);
+  refreshProfileSheet();
+}
+function addKitchenStapleFromInput(){ const i=el('staplesInput'); if(!i) return; addKitchenStaple(i.value); }
+async function removeKitchenStaple(i){ S.profile.kitchenStaples.splice(i,1); await sset('nonna:profile', S.profile); refreshProfileSheet(); }
+async function addSpice(v){
+  const parts = (v||'').split(/[,\n;]+/).map(s=>s.trim()).filter(Boolean);
+  for(const p of parts){ if(!S.profile.spices.some(x=>x.toLowerCase()===p.toLowerCase())) S.profile.spices.push(p); }
+  await sset('nonna:profile', S.profile);
+  refreshProfileSheet();
+}
+function addSpiceFromInput(){ const i=el('spicesInput'); if(!i) return; addSpice(i.value); }
+async function removeSpice(i){ S.profile.spices.splice(i,1); await sset('nonna:profile', S.profile); refreshProfileSheet(); }
 async function saveProfileText(key,val){
   /* Hinweis: 'password' ist ein reines Freitextfeld ohne Hashing/Session – rein lokale
      Simulation des Account-Konzepts, KEIN echter Auth-Mechanismus. */
@@ -2086,11 +2345,79 @@ function dietaryConstraintsText(){
   if(allergyList.length) parts.push(`ALLERGIEN/UNVERTRÄGLICHKEITEN – verwende unter keinen Umständen: ${allergyList.join(', ')}. Das ist eine harte Sicherheitsregel, keine Geschmackspräferenz.`);
   if(S.profile.diet==='vegan') parts.push('Diät: STRIKT VEGAN – keine tierischen Produkte (kein Fleisch, Fisch, Ei, Milchprodukte, Honig).');
   else if(S.profile.diet==='vegetarisch') parts.push('Diät: STRIKT VEGETARISCH – kein Fleisch, kein Fisch.');
+  if(parts.length) parts.push('Diese Grundeinstellungen sind bindend und stehen über der Zutatenliste des Nutzers UND über jedem Einzelwunsch/Foto. Widerspricht eine vom Nutzer genannte Zutat dem, lass sie einfach weg oder ersetze sie sinnvoll – kein Fehler, kein Abbruch, keine Rückfrage.');
   return parts.length ? '\n'+parts.join('\n') : '';
+}
+function kitchenStaplesText(){
+  const items = [...(S.profile.kitchenStaples||[]), ...(S.profile.spices||[])];
+  return items.length ? `\nDiese Grundzutaten/Gewürze gelten als vorhanden – der Nutzer muss sie nicht extra angeben, du darfst frei damit arbeiten: ${items.join(', ')}.` : '';
+}
+/* ============ PERSONALISIERUNG (Abschnitt 2) ============
+   Präferenzprofil wird nicht clientseitig strukturiert extrahiert (kein NLP verfügbar),
+   sondern als Rohkontext bewerteter Gerichte an das Modell übergeben – das leitet daraus
+   selbst Küche/Zutaten/Schärfe/Zubereitungsart ab. Aktiv erst ab RATING_MIN_FOR_PERSONALIZATION Bewertungen. */
+const RATING_MIN_FOR_PERSONALIZATION = 5;
+function ratedHistoryCount(){ return S.history.filter(h=>h.rating>0).length; }
+function preferenceProfileText(){
+  if(ratedHistoryCount() < RATING_MIN_FOR_PERSONALIZATION) return '';
+  const rated = S.history.filter(h=>h.rating>0);
+  const liked = rated.filter(h=>h.rating>=4).slice(0,8);
+  const disliked = rated.filter(h=>h.rating<=2).slice(0,8);
+  if(!liked.length && !disliked.length) return '';
+  const summarize = h=>`${h.titel}${h.konzept?' ('+h.konzept+')':''}`;
+  const parts = ['PERSONALISIERUNG – leite aus diesen vom Nutzer bewerteten Gerichten ein Geschmacksprofil ab (bevorzugte/abgelehnte Zutaten, Küchenstil, Schärfegrad, Zubereitungsart) und richte die 5 Vorschläge grundsätzlich danach aus:'];
+  if(liked.length) parts.push(`Gefiel dem Nutzer gut (4-5 Sterne): ${liked.map(summarize).join('; ')}`);
+  if(disliked.length) parts.push(`Gefiel dem Nutzer nicht (1-2 Sterne): ${disliked.map(summarize).join('; ')}`);
+  parts.push('WICHTIG: Von den 5 Konzepten müssen genau 2 bewusste AUSREISSER sein – deutlich anders als das abgeleitete Profil (andere Küche, andere Hauptzutat oder andere Zubereitungsart als die bevorzugten Gerichte), gezielt gegensätzlich gewählt statt zufällig, um den Geschmack des Nutzers zu erweitern. Markiere genau diese 2 Konzepte mit "ausreisser":true, die übrigen 3 mit "ausreisser":false.');
+  return '\n'+parts.join('\n');
 }
 async function toggleProSwitch(){ S.pro=!S.pro; await sset('nonna:pro',S.pro); openProfile(); render(); }
 async function clearAnswers(){ S.answers=null; await sset('nonna:answers',null); openProfile(); }
 function closeModal(){ el('modal').innerHTML=''; }
+
+/* ============ GESTAFFELTE ONBOARDING-POP-UPS (Abschnitt 8) ============ */
+function onboardingModalHTML(heading, text, ctaLabel, ctaOnclick, popupKey){
+  return `
+  <div class="overlay" onclick="if(event.target===this)dismissOnboarding('${popupKey}')">
+    <div class="sheet" style="text-align:center;position:relative">
+      <button onclick="dismissOnboarding('${popupKey}')" aria-label="Schließen" style="position:absolute;top:var(--s3);right:var(--s3);width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:15px;color:var(--muted)">✕</button>
+      ${heading?`<h2 style="font-family:var(--serif);font-style:italic;margin-top:0">${esc(heading)}</h2>`:''}
+      <p class="sub" style="margin:${heading?'var(--s2)':'0'} 0 var(--s4)">${esc(text)}</p>
+      <button class="btn warm" onclick="${ctaOnclick}">${esc(ctaLabel)}</button>
+    </div>
+  </div>`;
+}
+async function dismissOnboarding(key){
+  S.onboarding[key] = true;
+  await sset('nonna:onboarding', S.onboarding);
+  closeModal();
+}
+async function openProfileFromOnboarding(key){
+  await dismissOnboarding(key);
+  openProfile();
+}
+function openOnboarding0(){
+  el('modal').innerHTML = onboardingModalHTML('', `Ich lerne von dir. Bewerte meine Rezepte – so weiß ich, was dir schmeckt. Aber ganz verwöhnen lass ich dich nicht: hin und wieder gibt's was Neues. È sempre casa mia, no? 😉`, 'Weiter Kochen', "dismissOnboarding('popup0')", 'popup0');
+}
+function openOnboarding1(){
+  el('modal').innerHTML = onboardingModalHTML('Wer isst heute mit?', `Kein Fleisch, keine Tierprodukte? Ma va bene! Sag's mir unter Einstellungen → Famiglia, dann koch ich nur, was dir wirklich schmeckt.`, 'Jetzt einrichten', "openProfileFromOnboarding('popup1')", 'popup1');
+}
+function openOnboarding2(){
+  el('modal').innerHTML = onboardingModalHTML('Was hast du immer daheim?', 'Öl, Salz, Peperoncino – jede Küche hat ihre Klassiker. Trag\'s ein unter Einstellungen → Famiglia, dann muss ich nicht ständig fragen.', 'Küchenschrank füllen', "openProfileFromOnboarding('popup2')", 'popup2');
+}
+function openOnboarding3(){
+  el('modal').innerHTML = onboardingModalHTML('Nicht jeder verträgt alles – così è la vita.', 'Allergie oder Unverträglichkeit? Unter Einstellungen → Famiglia eintragen, dann pass ich für dich auf.', 'Jetzt eintragen', "openProfileFromOnboarding('popup3')", 'popup3');
+}
+function maybeShowOnboardingPopup(){
+  if(el('modal').innerHTML.trim()) return; // kein anderes Modal überdecken
+  if(S.visits===1){
+    if(!S.onboarding.popup0) openOnboarding0();
+    return;
+  }
+  if(!S.onboarding.popup1){ openOnboarding1(); return; }
+  if(!S.onboarding.popup2){ openOnboarding2(); return; }
+  if(!S.onboarding.popup3){ openOnboarding3(); return; }
+}
 
 /* ============ INIT ============ */
 (async function(){
@@ -2099,6 +2426,7 @@ function closeModal(){ el('modal').innerHTML=''; }
   stopLoader();
   render();
   track('screen_view', {screen_name:S.tab});
+  maybeShowOnboardingPopup();
 })();
 </script>
 </body>
