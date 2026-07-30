@@ -58,6 +58,9 @@ main{flex:1;overflow-y:auto;padding:0 var(--pad) 120px}
 h1.screen{font-family:var(--display);font-weight:800;font-size:34px;line-height:1.05;letter-spacing:-.03em;color:var(--blue-900);margin:var(--s4) 0 var(--s2)}
 .sub{color:var(--muted);font-size:15px;line-height:1.5;margin:0 0 var(--s6)}
 .sec-label{font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--blue-500);margin:var(--s6) 0 var(--s3)}
+.sec-label.collapsible{display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.collapse-hint{font-size:11px;font-weight:600;text-transform:none;letter-spacing:normal;color:var(--muted)}
+.buon-appetito{text-align:center;font-family:var(--display);font-weight:700;font-size:15px;color:var(--blue-700);margin-top:var(--s5)}
 .back{border:0;background:none;cursor:pointer;font-family:var(--body);font-weight:600;font-size:14px;color:var(--blue-700);padding:0;margin:var(--s4) 0 0;display:inline-flex;align-items:center;gap:6px;height:28px}
 .nonna-says{display:flex;gap:10px;align-items:flex-start;margin:0 0 var(--s5)}
 .nonna-says .bubble{background:var(--surface);border:1px solid var(--line);border-radius:4px 16px 16px 16px;padding:10px 14px;font-size:14px;line-height:1.45}
@@ -128,13 +131,15 @@ input.field{height:52px}
 .zutat .m{color:var(--blue-700);font-weight:600;white-space:nowrap}
 .step{display:flex;gap:var(--s4);margin-bottom:var(--s4)}
 .step .n{flex:0 0 30px;height:30px;border-radius:50%;background:var(--blue-700);color:#fff;font-family:var(--display);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
-.step p{font-size:14.5px;line-height:1.55;padding-top:4px}
+.step p{font-size:16px;line-height:1.55;padding-top:4px}
 .step-body{flex:1;min-width:0}
 .step-timer{display:flex;align-items:center;gap:var(--s2);margin-top:8px}
 .step-timer .t-disp{font-family:var(--display);font-weight:700;font-size:15px;min-width:44px;color:var(--blue-700)}
 .step-timer.running .t-disp{color:var(--warm-dark,#966A22)}
 .step-timer .t-btn{width:30px;height:30px;flex:0 0 30px;border-radius:50%;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;color:var(--blue-700)}
 .stove-ic{font-size:13px}
+.voice-dot{width:9px;height:9px;border-radius:50%;background:#E3524A;flex:0 0 9px;animation:voicepulse 1.4s ease-in-out infinite}
+@keyframes voicepulse{0%,100%{opacity:.35;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
 /* Tabbar */
 nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:760px;background:rgba(247,250,253,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);display:flex;padding:var(--s2) var(--s2) calc(10px + env(safe-area-inset-bottom));z-index:30}
 nav button{flex:1;border:0;background:none;cursor:pointer;font-family:var(--body);font-size:11px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:12px}
@@ -268,6 +273,7 @@ nav button .lock-mini{font-size:9px;color:var(--warm)}
     </div>
     <div class="header-actions">
       <button class="heart-badge" id="headerHeart" onclick="toggleFav()" aria-label="Favorit" style="display:none">♡</button>
+      <button class="chip-btn" id="moodBadge" onclick="openMoodPicker()" aria-label="Nonnas Gemütszustand">…</button>
       <button class="chip-btn" id="proBadge" onclick="openProfile()">…</button>
     </div>
   </header>
@@ -291,6 +297,7 @@ const S = {
   timers:{},
   tts:{active:false, stepIndex:0},
   visits:0, onboarding:{popup0:false, popup1:false, popup2:false, popup3:false},
+  mood:'lieblich', voiceExplained:false,
   loadTimer:null, lastErr:null
 };
 const FREE_LIMIT = 2;
@@ -799,10 +806,10 @@ async function sset(key,val){
 }
 
 async function loadAll(){
-  const [pro,usage,favs,history,answers,mealplan,school,account,schoolLevel,profile,onboarding,visits] = await Promise.all([
+  const [pro,usage,favs,history,answers,mealplan,school,account,schoolLevel,profile,onboarding,visits,mood,voiceExplained] = await Promise.all([
     sget('nonna:pro'), sget('nonna:usage'), sget('nonna:favorites'), sget('nonna:history'),
     sget('nonna:answers'), sget('nonna:mealplan'), sget('nonna:school'), sget('nonna:account'), sget('nonna:schoolLevel'),
-    sget('nonna:profile'), sget('nonna:onboarding'), sget('nonna:visits')
+    sget('nonna:profile'), sget('nonna:onboarding'), sget('nonna:visits'), sget('nonna:mood'), sget('nonna:voiceExplained')
   ]);
   S.pro = !!pro;
   S.usage = Array.isArray(usage)?usage:[];
@@ -826,6 +833,8 @@ async function loadAll(){
   }
   S.visits = (typeof visits==='number' ? visits : 0) + 1;
   await sset('nonna:visits', S.visits);
+  if(mood==='lieblich'||mood==='streng'||mood==='eile') S.mood = mood;
+  S.voiceExplained = !!voiceExplained;
 }
 
 /* ============ API ============ */
@@ -838,6 +847,51 @@ Harte Regeln:
 - Sprache: professionell, lebendig, inspirierend – aber textlich kurz und übersichtlich.
 - Erwähne nirgendwo "The Taste".
 - Antworte AUSSCHLIESSLICH mit validem JSON nach dem vorgegebenen Schema. Kein Markdown, keine Backticks, kein Text davor oder danach.`;
+
+/* ============ NONNA GEMÜTSZUSTÄNDE (Abschnitt 9) ============
+   Betrifft ausschließlich Ton/Rahmung der Kommentarfelder (zutatenanalyse/geschmacksprofil/anrichten) –
+   Zutaten, Mengen, Zeiten, Temperaturen und die Zubereitungsschritte bleiben in jedem Modus identisch. */
+const MOOD_META = {
+  lieblich: {label:'Lieblich', icon:'😊'},
+  streng: {label:'Streng', icon:'😤'},
+  eile: {label:'In Eile', icon:'⏱️'}
+};
+const NONNA_PERSONA = {
+  lieblich: 'Tonfall in Begrüßung/Kommentaren/Rahmung: liebevoll, warmherzig, humorvoll – wie eine herzliche italienische Nonna, ermutigend und verspielt.',
+  streng: 'Tonfall in Begrüßung/Kommentaren/Rahmung: eine STRENGE Nonna – bestimmt, mit hohen Ansprüchen, duldet keine Abkürzungen oder Schlamperei (z.B. "bei mir wird ordentlich gekocht, keine faulen Tricks"). Bleibt dabei liebevolle Großmutter, KEIN Drill-Sergeant – streng aus Fürsorge, nie grob oder militärisch.',
+  eile: 'Tonfall in Begrüßung/Kommentaren/Rahmung: knapp, effizient, auf den Punkt – Nonna weiß, dass es schnell gehen muss. Kurze klare Sätze, keine Ausschmückungen, aber weiterhin warmherzig.'
+};
+function systemChefForMood(){
+  return SYSTEM_CHEF + '\n\n' + (NONNA_PERSONA[S.mood]||NONNA_PERSONA.lieblich) +
+    '\nDiese Ton-Vorgabe betrifft AUSSCHLIESSLICH Begrüßung/Kommentare/Rahmung (z.B. zutatenanalyse, geschmacksprofil, anrichten) – Zutaten, Mengen, Zeiten, Temperaturen und die Zubereitungsschritte selbst bleiben in jedem Modus inhaltlich exakt identisch und sachlich-instruktiv.';
+}
+const BUON_APPETITO = {
+  lieblich: 'Buon appetito, tesoro! 🤌',
+  streng: 'Und jetzt iss ordentlich auf. Buon appetito! 🤌',
+  eile: 'Buon appetito – und ran! 🤌'
+};
+function openMoodPicker(){
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="sheet">
+      <h2 style="font-family:var(--serif);font-style:italic">Wie drauf ist Nonna heute?</h2>
+      <p class="sub" style="margin-bottom:var(--s4)">Ändert nur den Ton – Zutaten, Mengen und Zeiten bleiben immer gleich.</p>
+      ${Object.keys(MOOD_META).map(m=>`
+      <div class="toggle" onclick="setMood('${m}')" style="cursor:pointer">
+        <div><b style="font-size:15px">${MOOD_META[m].icon} ${MOOD_META[m].label}</b></div>
+        <button class="sw ${S.mood===m?'on':''}" aria-label="${esc(MOOD_META[m].label)} wählen"></button>
+      </div>`).join('')}
+      <button class="btn ghost" style="margin-top:var(--s4)" onclick="closeModal()">Schließen</button>
+    </div>
+  </div>`;
+}
+async function setMood(m){
+  if(!MOOD_META[m]) return;
+  S.mood = m;
+  await sset('nonna:mood', m);
+  openMoodPicker();
+  render();
+}
 
 const SYSTEM_VISION = `Du analysierst ein Foto (Kühlschrank, Vorratsschrank, Küchentisch o.ä.) und erkennst ausschließlich Lebensmittel/Zutaten, die eindeutig auf dem Bild zu erkennen sind.
 Harte Regeln:
@@ -1024,6 +1078,7 @@ function render(){
   stopLoader();
   el('proBadge').textContent = (S.pro ? 'Famiglia' : 'Amico') + ' ⚙️';
   el('proBadge').className = 'chip-btn'+(S.pro?' pro-on':'');
+  el('moodBadge').textContent = MOOD_META[S.mood].icon + ' ' + MOOD_META[S.mood].label;
   renderTabbar();
   renderHeaderHeart();
   const app = el('app');
@@ -1220,7 +1275,7 @@ Entwickle daraus 5 unterschiedliche Gerichts-KONZEPTE (noch keine vollen Rezepte
 Falls eine Zutat des Nutzers wegen Diät/Allergie nicht verwendet werden kann: lass sie im Konzept weg/ersetze sie sinnvoll und nenne das kurz im Feld "ersetzt" (sonst leerer String).
 JSON-Schema (halte dich exakt daran, alles auf Deutsch, sehr kompakt):
 {"konzepte":[{"titel":"...","konzept":"1 knapper Satz, max. 10 Wörter","geschmacksprofil":"1 knapper Satz, max. 10 Wörter, Kern von Balance/Textur/Aroma","dauer":"z.B. 30 Min","schwierigkeit":"Einfach|Mittel|Anspruchsvoll","ersetzt":"kurzer Hinweis oder leerer String","ausreisser":false}]}`;
-    const data = await askClaude(prompt);
+    const data = await askClaude(prompt, systemChefForMood());
     if(!data.konzepte || !data.konzepte.length) throw new Error('Schema: "konzepte" fehlt');
     if(!S.pro) await consumeUsage();
     g.concepts = data.konzepte.slice(0,5);
@@ -1290,7 +1345,7 @@ JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, ke
 {"titel":"...","konzept":"1 Satz","zutatenanalyse":"1-2 Sätze","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1-2 Sätze","geschmacksprofil":"1-2 Sätze"}
 Bei zählbaren Zutaten (Eier, Zehen, Stangen, Dosen …): "einheit":null und die Zähleinheit steckt im "name" (z. B. "große Eier" statt Name "Ei" + Einheit "Stück").
 Pro Schritt: "timer_seconds" nur setzen, wenn der Schritt eine konkrete Zeitdauer hat (z. B. köcheln, backen, ruhen) – sonst null. "requires_stove":true nur, wenn der Schritt am Herd/Ofen aktiv beaufsichtigt werden muss.`;
-    const data = await askClaude(prompt, SYSTEM_CHEF, 1600);
+    const data = await askClaude(prompt, systemChefForMood(), 1600);
     if(!data.titel || !data.schritte) throw new Error('Schema: Rezeptfelder fehlen');
     data.basisPersonen = parsePersonCount(S.answers); // lokale Nutzerangabe ist die verlässliche Quelle, nicht die Modellantwort
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
@@ -1322,9 +1377,11 @@ function ensureTimer(key, duration){
 function updateTimerDOM(i){
   const key = timerKeyFor(i);
   const t = S.timers[key]; if(!t) return;
-  const disp = el('timerDisp-'+i); if(disp) disp.textContent = fmtTimer(t.remaining);
-  const btn = el('timerToggle-'+i); if(btn) btn.textContent = t.running ? '⏸' : '▶';
-  const wrap = el('timerWrap-'+i); if(wrap) wrap.classList.toggle('running', t.running);
+  [['timerDisp-'+i,'timerToggle-'+i,'timerWrap-'+i], ['timerDisp-tts-'+i,'timerToggle-tts-'+i,'timerWrap-tts-'+i]].forEach(([dispId,btnId,wrapId])=>{
+    const disp = el(dispId); if(disp) disp.textContent = fmtTimer(t.remaining);
+    const btn = el(btnId); if(btn) btn.textContent = t.running ? '⏸' : '▶';
+    const wrap = el(wrapId); if(wrap) wrap.classList.toggle('running', t.running);
+  });
 }
 function startTimerTick(){
   if(_timerTick) return;
@@ -1404,17 +1461,27 @@ function startReadAloud(){
   S.tts = {active:true, stepIndex:0};
   renderReadAloud();
   speakCurrentStep();
+  startVoiceControl();
 }
 function renderReadAloud(){
   const r = getCurrentRecipe();
   const steps = (r.schritte||[]).map(normalizeStep);
   const i = S.tts.stepIndex;
   const step = steps[i];
+  const key = timerKeyFor(i);
+  const t = S.timers[key];
+  const voiceOn = S.mood==='eile' && speechRecognitionAvailable();
   el('modal').innerHTML = `
   <div class="overlay" onclick="if(event.target===this)closeReadAloud()">
     <div class="sheet" style="text-align:center">
       <p class="usage-note" style="margin-top:0">Schritt ${i+1} von ${steps.length}</p>
       <p style="font-size:19px;line-height:1.5;font-family:var(--display);font-weight:600;margin:var(--s3) 0 var(--s4)">${esc(step.text)}</p>
+      ${step.timer_seconds?`
+      <div class="step-timer" id="timerWrap-tts-${i}" style="justify-content:center;margin-bottom:var(--s3)">
+        <span class="t-disp" id="timerDisp-tts-${i}">${fmtTimer(t?t.remaining:step.timer_seconds)}</span>
+        <button class="t-btn" onclick="toggleStepTimer(${i},${step.timer_seconds})" id="timerToggle-tts-${i}" aria-label="Timer starten/pausieren">${t&&t.running?'⏸':'▶'}</button>
+        <button class="t-btn" onclick="resetStepTimer(${i},${step.timer_seconds})" aria-label="Timer zurücksetzen">↺</button>
+      </div>`:''}
       <div class="row" style="margin-bottom:var(--s3)">
         <button class="btn ghost" ${i<=0?'disabled':''} onclick="ttsPrevStep()">← Zurück</button>
         <button class="btn ghost" onclick="speakCurrentStep()">🔁 Nochmal vorlesen</button>
@@ -1422,8 +1489,17 @@ function renderReadAloud(){
       <button class="btn" onclick="ttsNextStep()">${i<steps.length-1?'Weiter →':'Fertig'}</button>
       <button class="btn ghost" style="margin-top:var(--s2)" onclick="closeReadAloud()">Schließen</button>
       ${('speechSynthesis' in window)?'':'<p class="usage-note">Dieses Gerät unterstützt keine Sprachausgabe – die Schritte werden nur angezeigt.</p>'}
+      <div id="voiceIndicator" style="display:${voiceOn?'flex':'none'};align-items:center;justify-content:center;gap:6px;margin-top:var(--s3);font-size:12.5px;color:var(--muted)">
+        <span class="voice-dot"></span> Ich höre zu – „Weiter", „Zurück", „Nochmal", „Timer"
+      </div>
     </div>
   </div>`;
+}
+function fmtTimerSpoken(sec){
+  if(sec<60) return `${sec} Sekunden`;
+  const m=Math.floor(sec/60), rest=sec%60;
+  if(rest===0) return `${m} Minute${m===1?'':'n'}`;
+  return `${m} Minuten ${rest} Sekunden`;
 }
 function speakCurrentStep(){
   if(!('speechSynthesis' in window)) return;
@@ -1432,8 +1508,20 @@ function speakCurrentStep(){
   const step = steps[S.tts.stepIndex];
   if(!step) return;
   window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(step.text);
+  let text = step.text;
+  const voiceOn = S.mood==='eile' && speechRecognitionAvailable();
+  if(S.mood==='eile' && step.timer_seconds){
+    text += ` ${fmtTimerSpoken(step.timer_seconds)}${voiceOn?', sag Timer, wenn’s losgehen soll.':'. Timer bei Bedarf manuell starten.'}`;
+    if(voiceOn && !S.voiceExplained){
+      text = `Kurz zur Sprachsteuerung: sag jederzeit Weiter, Zurück, Nochmal oder Timer, ich höre mit. ` + text;
+      S.voiceExplained = true;
+      sset('nonna:voiceExplained', true);
+    }
+  }
+  const u = new SpeechSynthesisUtterance(text);
   u.lang = 'de-DE';
+  u.rate = 0.92; // Interimslösung ohne Charakterstimme: etwas langsamer und wärmer als Standard
+  u.pitch = 1.05;
   window.speechSynthesis.speak(u);
 }
 function ttsNextStep(){
@@ -1452,14 +1540,87 @@ function ttsPrevStep(){
 }
 function closeReadAloud(){
   if('speechSynthesis' in window) window.speechSynthesis.cancel();
+  stopVoiceControl();
   S.tts = {active:false, stepIndex:0};
   closeModal();
 }
 
+/* ============ SPRACHSTEUERUNG SCHRITTNAVIGATION (Abschnitt 11, nur In-Eile) ============
+   Fester Wortsatz statt freiem Diktat: Weiter/Zurück/Nochmal/Timer. Tap-Bedienung im
+   Vorlese-Overlay bleibt immer der Pflicht-Fallback, Sprachsteuerung ist rein additiv. */
+let _recognition = null;
+let _voiceListening = false;
+let _voiceCooldownUntil = 0;
+function speechRecognitionAvailable(){ return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+function updateVoiceIndicator(){
+  const ind = el('voiceIndicator');
+  if(ind) ind.style.display = _voiceListening ? 'flex' : 'none';
+}
+function startVoiceControl(){
+  if(S.mood!=='eile' || !speechRecognitionAvailable() || _recognition) return;
+  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const rec = new Rec();
+  rec.lang = 'de-DE';
+  rec.continuous = true;
+  rec.interimResults = false;
+  rec.onresult = (e)=>{
+    if(Date.now() < _voiceCooldownUntil) return;
+    const last = e.results[e.results.length-1];
+    if(!last || !last.isFinal) return;
+    const transcript = ((last[0]&&last[0].transcript)||'').trim().toLowerCase();
+    handleVoiceCommand(transcript);
+  };
+  rec.onerror = ()=>{};
+  rec.onend = ()=>{
+    _voiceListening = false; updateVoiceIndicator();
+    if(_recognition===rec && S.tts.active && S.mood==='eile'){
+      try{ rec.start(); _voiceListening=true; updateVoiceIndicator(); }catch(e){}
+    }
+  };
+  try{ rec.start(); _recognition=rec; _voiceListening=true; updateVoiceIndicator(); }catch(e){ _recognition=null; }
+}
+function stopVoiceControl(){
+  _voiceListening = false;
+  if(_recognition){
+    const rec = _recognition; _recognition = null;
+    rec.onend = null;
+    try{ rec.stop(); }catch(e){}
+  }
+  updateVoiceIndicator();
+}
+function handleVoiceCommand(transcript){
+  _voiceCooldownUntil = Date.now() + 1500; // Sicherheitsfenster gegen Mehrfachauslösung
+  if(transcript.includes('weiter')) ttsNextStep();
+  else if(transcript.includes('zurück') || transcript.includes('zurueck')) ttsPrevStep();
+  else if(transcript.includes('nochmal')) speakCurrentStep();
+  else if(transcript.includes('timer')) startVoiceTimer();
+}
+function startVoiceTimer(){
+  const r = getCurrentRecipe(); if(!r) return;
+  const steps = (r.schritte||[]).map(normalizeStep);
+  const step = steps[S.tts.stepIndex];
+  if(!step || !step.timer_seconds) return; // Schritt ohne Timer-Feld: stillschweigend ignorieren
+  const key = timerKeyFor(S.tts.stepIndex);
+  const t = ensureTimer(key, step.timer_seconds);
+  if(!t.running){ t.running = true; startTimerTick(); updateWakeLock(); }
+  renderReadAloud();
+}
+
 /* Rezept-Detailansicht */
+function ensureCollapseState(r){
+  if(!r._collapse) r._collapse = {intro:S.mood==='eile', flavor:S.mood==='eile', plating:S.mood==='eile'};
+  return r._collapse;
+}
+function toggleRecipeSection(key){
+  const r = getCurrentRecipe(); if(!r) return;
+  const c = ensureCollapseState(r);
+  c[key] = !c[key];
+  render();
+}
 function recipeHTML(r, backFn){
   const personen = r.basisPersonen ? (r._personen||r.basisPersonen) : null;
   const zList = r.basisPersonen ? scaleZutaten(r.zutaten, r.basisPersonen, personen) : (r.zutaten||[]);
+  const collapse = ensureCollapseState(r);
   return `
   <button class="back" onclick="${backFn}">← Zurück</button>
   <div class="r-head">
@@ -1469,7 +1630,7 @@ function recipeHTML(r, backFn){
   <div class="star-rating" role="group" aria-label="Rezept bewerten">
     ${[1,2,3,4,5].map(n=>`<button onclick="setRecipeRating(${n})" aria-label="${n} Stern${n===1?'':'e'}" class="${(r.rating||0)>=n?'on':''}">★</button>`).join('')}
   </div>
-  ${r.zutatenanalyse?`<div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">${esc(r.zutatenanalyse)}</div></div>`:''}
+  ${r.zutatenanalyse?`<div class="nonna-says" onclick="toggleRecipeSection('intro')" style="cursor:pointer" title="${collapse.intro?'Antippen zum Anzeigen':'Antippen zum Verbergen'}"><div class="nonna-face">👵</div><div class="bubble">${collapse.intro?'Nonnas Kommentar antippen …':esc(r.zutatenanalyse)}</div></div>`:''}
   ${r.basisPersonen?`
   <div class="pstepper">
     <button onclick="changeRecipePersonen(-1)" ${personen<=1?'disabled':''} aria-label="Weniger Personen">–</button>
@@ -1504,8 +1665,9 @@ function recipeHTML(r, backFn){
       </div>
     </div>`;
   }).join('')}
-  ${r.anrichten?`<div class="sec-label">Anrichten</div><div class="card"><p style="font-size:14.5px;line-height:1.55">${esc(r.anrichten)}</p></div>`:''}
-  ${r.geschmacksprofil?`<div class="sec-label">Warum es schmeckt</div><p style="font-size:14.5px;line-height:1.55;color:var(--muted)">${esc(r.geschmacksprofil)}</p>`:''}
+  ${r.anrichten?`<div class="sec-label collapsible" onclick="toggleRecipeSection('plating')">Anrichten<span class="collapse-hint">${collapse.plating?'▸ zeigen':'▾ verbergen'}</span></div>${collapse.plating?'':`<div class="card"><p style="font-size:14.5px;line-height:1.55">${esc(r.anrichten)}</p></div>`}`:''}
+  ${r.geschmacksprofil?`<div class="sec-label collapsible" onclick="toggleRecipeSection('flavor')">Warum es schmeckt<span class="collapse-hint">${collapse.flavor?'▸ zeigen':'▾ verbergen'}</span></div>${collapse.flavor?'':`<p style="font-size:14.5px;line-height:1.55;color:var(--muted)">${esc(r.geschmacksprofil)}</p>`}`:''}
+  <p class="buon-appetito">${BUON_APPETITO[S.mood]||BUON_APPETITO.lieblich}</p>
   <div style="height:var(--s5)"></div>`;
 }
 function getCurrentRecipe(){
@@ -1719,7 +1881,7 @@ ${dietaryConstraintsText()}${kitchenStaplesText()}
 ${ci===0?`Erstelle zusätzlich eine gebündelte Prep-Session für den GESAMTEN Zeitraum (was wird einmal vorbereitet und mehrfach verwendet).`:'Feld "prepSession" als leeres Array zurückgeben.'}
 Sehr kompakt. JSON-Schema (exakt, Deutsch):
 {"prepSession":["max 5 kurze Punkte"],"plan":[{"tag":${von},"mahlzeit":"Frühstück|Mittag|Abend","titel":"...","kurzbeschreibung":"max 1 Satz","prepHinweis":"max 5 Wörter"}]}`;
-      const data = await askClaude(prompt, SYSTEM_CHEF, 2000);
+      const data = await askClaude(prompt, systemChefForMood(), 2000);
       if(!data.plan) throw new Error('Schema: "plan" fehlt (Etappe '+(ci+1)+')');
       if(ci===0) prepSession = data.prepSession||[];
       plan = plan.concat(data.plan);
@@ -1891,7 +2053,7 @@ ${dietaryConstraintsText()}${kitchenStaplesText()}
 JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
 {"titel":"...","konzept":"1 Satz","zutatenanalyse":"1 Satz","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1 Satz","geschmacksprofil":"1 Satz"}
 Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name". Pro Schritt: "timer_seconds" nur bei konkreter Zeitdauer, sonst null. "requires_stove":true nur bei aktiver Beaufsichtigung am Herd/Ofen.`;
-    const data = await askClaude(prompt, SYSTEM_CHEF, 1600);
+    const data = await askClaude(prompt, systemChefForMood(), 1600);
     if(!data.titel) throw new Error('Schema: Rezeptfelder fehlen');
     data.basisPersonen = parsePersonCount(S.answers);
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
@@ -2039,6 +2201,7 @@ function shareLessonIngredients(){
   shareOrDownloadText(`Zutaten: ${r.titel}`, recipeIngredientsText(r), `nonna-${safeFilename(r.titel)}.txt`);
 }
 function recipeCore(r){
+  const collapse = ensureCollapseState(r);
   return `
   <h1 class="screen" style="font-size:26px;margin-top:0">${esc(r.titel)}</h1>
   <p class="sub" style="margin-bottom:var(--s4)">${esc(r.konzept||'')}</p>
@@ -2070,7 +2233,8 @@ function recipeCore(r){
       </div>
     </div>`;
   }).join('')}
-  ${r.anrichten?`<div class="sec-label">Anrichten</div><div class="card" style="margin-bottom:var(--s4)"><p style="font-size:14.5px;line-height:1.55">${esc(r.anrichten)}</p></div>`:''}`;
+  ${r.anrichten?`<div class="sec-label collapsible" onclick="toggleRecipeSection('plating')">Anrichten<span class="collapse-hint">${collapse.plating?'▸ zeigen':'▾ verbergen'}</span></div>${collapse.plating?'':`<div class="card" style="margin-bottom:var(--s4)"><p style="font-size:14.5px;line-height:1.55">${esc(r.anrichten)}</p></div>`}`:''}
+  <p class="buon-appetito">${BUON_APPETITO[S.mood]||BUON_APPETITO.lieblich}</p>`;
 }
 function startQuiz(){ S.sc.phase='quiz'; S.sc.quizIdx=0; S.sc.quizAnswered=null; S.sc.correct=0; render(); }
 function answerQuiz(oi){
@@ -2410,6 +2574,7 @@ function openOnboarding3(){
 }
 function maybeShowOnboardingPopup(){
   if(el('modal').innerHTML.trim()) return; // kein anderes Modal überdecken
+  if(S.mood==='eile') return; // In-Eile-Session: fällige Pop-ups pausieren, State bleibt unverändert für später
   if(S.visits===1){
     if(!S.onboarding.popup0) openOnboarding0();
     return;
