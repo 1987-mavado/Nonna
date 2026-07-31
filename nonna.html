@@ -302,6 +302,8 @@ const S = {
   visits:0, onboarding:{popup0:false, popup1:false, popup2:false, popup3:false},
   profilePhoto:{target:null, state:'idle', errorMsg:''},
   mood:'lieblich', voiceExplained:false, anonId:null,
+  progress:{totalPoints:0, techniqueLevels:{}, cookedDates:[]},
+  shareFlow:{open:false, recipe:null, photoFile:null, state:'idle', errorMsg:null},
   loadTimer:null, lastErr:null
 };
 const FREE_LIMIT = 2;
@@ -337,6 +339,121 @@ function submitGateCode(){
   }
 }
 if(gateUnlocked()) hideGate();
+
+/* ============ GAMIFICATION: TECHNIK-TAXONOMIE + TIERS (rein client-seitig, kein Ranking) ============
+   Feste, kuratierte Liste – Nonna wählt daraus, erfindet keine neuen Kategorien. */
+const TECHNIQUE_TAXONOMY = [
+  { id: "emulsion", label: "Emulsion", baseValue: 30 },
+  { id: "fermentation", label: "Fermentation/Teigführung", baseValue: 35 },
+  { id: "reduktion", label: "Reduktion/Sauce-Balance", baseValue: 25 },
+  { id: "fleisch_timing", label: "Präzises Fleisch-Timing", baseValue: 30 },
+  { id: "teigarbeit", label: "Handwerkliche Teigarbeit", baseValue: 35 },
+  { id: "maillard", label: "Röst-/Maillard-Kontrolle", baseValue: 20 },
+  { id: "gewuerzbalance", label: "Schärfe-/Gewürzbalance", baseValue: 20 },
+  { id: "rohkost", label: "Rohkost-Technik", baseValue: 30 }
+];
+const TIERS = [
+  { id: "ospite", label: "Ospite", minPoints: 0 },
+  { id: "nipote", label: "Nipote", minPoints: 300 },
+  { id: "cuoco_di_famiglia", label: "Cuoco di famiglia", minPoints: 1000 }
+];
+function getCurrentTier(totalPoints){
+  return [...TIERS].reverse().find(t => totalPoints >= t.minPoints);
+}
+async function saveUserState(){ await sset('nonna_progress', S.progress); }
+/* Kein Vertrauen auf rohen Modell-Output: jedes Feld wird geprüft/geclampt, bevor es
+   in die Punkteberechnung einfließt. fusion_bonus wird bewusst NEU aus cuisine_origin
+   abgeleitet statt das Modell-Flag zu übernehmen – das ist eine feste Regel, keine Schätzung. */
+function validateRecipeMetadata(meta){
+  meta = (meta && typeof meta==='object') ? meta : {};
+  meta.dish_name = typeof meta.dish_name==='string' ? meta.dish_name.slice(0,120) : '';
+  meta.cuisine_origin = Array.isArray(meta.cuisine_origin)
+    ? meta.cuisine_origin.filter(x=>typeof x==='string' && x.trim()).slice(0,4)
+    : [];
+  meta.technique_tags = (Array.isArray(meta.technique_tags) ? meta.technique_tags : [])
+    .filter(t => t && TECHNIQUE_TAXONOMY.some(tt => tt.id === t.technique))
+    .slice(0, 3)
+    .map(t => ({ technique: t.technique, intensity: Math.min(1, Math.max(0.1, Number(t.intensity)||0.1)) }));
+  meta.input_perceived_value = ["niedrig","mittel","hoch"].includes(meta.input_perceived_value) ? meta.input_perceived_value : "mittel";
+  meta.output_perceived_elevation = ["niedrig","mittel","hoch"].includes(meta.output_perceived_elevation) ? meta.output_perceived_elevation : "mittel";
+  meta.transformation_moment = !!meta.transformation_moment;
+  meta.fusion_bonus = meta.cuisine_origin.length > 1;
+  meta.celebration_text = typeof meta.celebration_text==='string' ? meta.celebration_text.slice(0,240) : '';
+  return meta;
+}
+function calculatePoints(meta, streakBonus){
+  const techniquePoints = (meta.technique_tags||[]).reduce((sum, t) => {
+    const tech = TECHNIQUE_TAXONOMY.find(tt => tt.id === t.technique);
+    return sum + (tech ? tech.baseValue * t.intensity : 0);
+  }, 0);
+  const elevationMap = { niedrig: 1, mittel: 1.3, hoch: 1.6 };
+  const inputMap = { niedrig: 1.5, mittel: 1.2, hoch: 1.0 }; // simple Zutaten = höherer Multiplikator
+  let points = techniquePoints * elevationMap[meta.output_perceived_elevation] * inputMap[meta.input_perceived_value];
+  if (meta.fusion_bonus) points *= 1.2;
+  if (streakBonus) points *= 1.2;
+  return Math.round(points);
+}
+function calculateStreak(cookedDates){
+  /* Datumsstrings bewusst als UTC-Mitternacht normalisiert statt gegen new Date() (lokale
+     Uhrzeit) zu vergleichen – sonst kippt die Zählung rund um Mitternacht je nach Zeitzone
+     und Tageszeit fälschlich auf 0, obwohl ein durchgehender Streak vorliegt. */
+  const sorted = [...new Set(cookedDates)].sort().reverse();
+  if(!sorted.length) return 0;
+  const todayStr = new Date().toISOString().split('T')[0];
+  let cursor = new Date(todayStr + 'T00:00:00Z');
+  let streak = 0;
+  for (const dateStr of sorted) {
+    const d = new Date(dateStr + 'T00:00:00Z');
+    const diffDays = Math.round((cursor - d) / 86400000);
+    if (diffDays === 0 || diffDays === 1) {
+      streak++;
+      cursor = d;
+    } else break;
+  }
+  return streak;
+}
+async function markAsCooked(recipeMeta){
+  const streakBefore = calculateStreak(S.progress.cookedDates);
+  const streakBonusApplied = streakBefore >= 3;
+  const pointsBefore = S.progress.totalPoints;
+  const points = calculatePoints(recipeMeta, streakBonusApplied);
+  S.progress.totalPoints += points;
+  const today = new Date().toISOString().split('T')[0];
+  if(!S.progress.cookedDates.includes(today)) S.progress.cookedDates.push(today);
+  (recipeMeta.technique_tags||[]).forEach(t => {
+    S.progress.techniqueLevels[t.technique] = (S.progress.techniqueLevels[t.technique] || 0) + 1;
+  });
+  await saveUserState();
+  const tierBefore = getCurrentTier(pointsBefore);
+  const newTier = getCurrentTier(S.progress.totalPoints);
+  return { points, newTier, tierChanged: newTier.id !== tierBefore.id, streak: calculateStreak(S.progress.cookedDates), streakBonusApplied };
+}
+async function handleMarkAsCooked(){
+  const r = getCurrentRecipe();
+  if(!r || !r.technique_tags || r._cooked) return;
+  r._cooked = true;
+  const result = await markAsCooked(r);
+  render();
+  showCookedCelebration(r, result);
+}
+function showCookedCelebration(r, result){
+  const tierLine = result.tierChanged ? `<p style="font-family:var(--display);font-weight:700;color:var(--blue-700);margin-bottom:var(--s2)">🎉 Neue Stufe: ${esc(result.newTier.label)}!</p>` : '';
+  const streakLine = result.streakBonusApplied ? `<p class="sub" style="margin-bottom:var(--s3)">Du kommst jetzt öfter in meine Küche … weiter so! (${result.streak} Tage in Folge)</p>` : '';
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="sheet" style="text-align:center">
+      <div style="font-size:40px;margin-bottom:var(--s2)">🎉</div>
+      ${r.transformation_moment && r.celebration_text ? `<p style="font-size:19px;line-height:1.5;font-family:var(--display);font-weight:700;margin-bottom:var(--s3)">${esc(r.celebration_text)}</p>` : `<h2 style="font-family:var(--serif);font-style:italic">Bravo!</h2>`}
+      ${tierLine}
+      ${streakLine}
+      <p class="usage-note">+${result.points} Punkte</p>
+      <div class="stack" style="margin-top:var(--s4)">
+        <button class="btn warm" onclick="openShareFlow()">📸 Foto teilen</button>
+        <button class="btn ghost" onclick="closeModal()">Schließen</button>
+      </div>
+    </div>
+  </div>`;
+}
 
 /* ============ EXAKTER FRAGEN-WORTLAUT ============ */
 /* Fest hinterlegte Formulierungen je Gemütszustand (keine KI-Generierung zur Laufzeit).
@@ -841,11 +958,11 @@ async function sset(key,val){
 }
 
 async function loadAll(){
-  const [pro,usage,favs,history,answers,mealplan,school,account,schoolLevel,profile,onboarding,visits,mood,voiceExplained,anonId] = await Promise.all([
+  const [pro,usage,favs,history,answers,mealplan,school,account,schoolLevel,profile,onboarding,visits,mood,voiceExplained,anonId,progress] = await Promise.all([
     sget('nonna:pro'), sget('nonna:usage'), sget('nonna:favorites'), sget('nonna:history'),
     sget('nonna:answers'), sget('nonna:mealplan'), sget('nonna:school'), sget('nonna:account'), sget('nonna:schoolLevel'),
     sget('nonna:profile'), sget('nonna:onboarding'), sget('nonna:visits'), sget('nonna:mood'), sget('nonna:voiceExplained'),
-    sget('nonna_anon_id')
+    sget('nonna_anon_id'), sget('nonna_progress')
   ]);
   S.pro = !!pro;
   S.usage = Array.isArray(usage)?usage:[];
@@ -880,6 +997,13 @@ async function loadAll(){
   /* Anonyme, geräte-stabile ID für anonymisiertes Nutzungs-Tracking (kein Klarname/Account-Bezug) */
   if(anonId){ S.anonId = anonId; }
   else { S.anonId = crypto.randomUUID(); await sset('nonna_anon_id', S.anonId); }
+  if(progress && typeof progress==='object'){
+    S.progress = {
+      totalPoints: typeof progress.totalPoints==='number' ? progress.totalPoints : 0,
+      techniqueLevels: progress.techniqueLevels || {},
+      cookedDates: Array.isArray(progress.cookedDates) ? progress.cookedDates : []
+    };
+  }
 }
 
 /* ============ API ============ */
@@ -966,6 +1090,21 @@ async function setMood(m){
   await sset('nonna:mood', m);
   openMoodPicker();
   render();
+}
+
+/* ============ GAMIFICATION: METADATEN-PROMPT-ZUSATZ (nur bei voller Rezeptausgabe, nicht bei den 5 Konzepten) ============ */
+const GAMIFICATION_FEWSHOT = `Kalibrierungs-Beispiele für die Metadaten (Maßstab für deine Einschätzung, nicht wörtlich übernehmen):
+- Cacio e Pepe: technique_tags [{"technique":"emulsion","intensity":0.8}], input_perceived_value "niedrig" (Pasta, Pfeffer, Pecorino), output_perceived_elevation "hoch", transformation_moment true
+- Ossobuco: technique_tags [{"technique":"fleisch_timing","intensity":0.7},{"technique":"reduktion","intensity":0.5}], input_perceived_value "mittel", output_perceived_elevation "hoch", transformation_moment false
+- Kimchi-Fried-Rice aus Restreis: cuisine_origin ["Koreanisch","Chinesisch"], technique_tags [{"technique":"fermentation","intensity":0.4},{"technique":"maillard","intensity":0.6}], input_perceived_value "niedrig", output_perceived_elevation "mittel", transformation_moment true, fusion_bonus true
+- Handgemachte Tagliatelle mit Butter-Salbei: technique_tags [{"technique":"teigarbeit","intensity":0.7}], input_perceived_value "niedrig" (Mehl, Ei, Butter), output_perceived_elevation "hoch", transformation_moment true
+- Ceviche: technique_tags [{"technique":"rohkost","intensity":0.6},{"technique":"gewuerzbalance","intensity":0.5}], input_perceived_value "mittel", output_perceived_elevation "hoch", transformation_moment false
+- Pasta al Pomodoro aus Dosentomaten: technique_tags [{"technique":"reduktion","intensity":0.5}], input_perceived_value "niedrig", output_perceived_elevation "mittel", transformation_moment true`;
+function gamificationSchemaPrompt(){
+  return `
+Zusätzlich zum Rezept: liefere im selben JSON-Objekt Gamification-Metadaten (zusätzliche Felder, ersetzen nichts vom Rezept):
+"dish_name":"Gerichtename", "cuisine_origin":["1-2 Küchen-Bezeichnungen"], "technique_tags":[{"technique":"...","intensity":0.1-1.0}] (max. 3, "technique" NUR aus dieser festen Liste: ${TECHNIQUE_TAXONOMY.map(t=>t.id).join(', ')}), "input_perceived_value":"niedrig|mittel|hoch" (wie einfach/günstig wirken die Ausgangszutaten?), "output_perceived_elevation":"niedrig|mittel|hoch" (wie gehoben/wie aus einem Restaurant wirkt das fertige Gericht?), "transformation_moment":true NUR bei echtem Kontrast einfache Zutaten → gehobenes Ergebnis (sonst false), "celebration_text": bei transformation_moment:true EIN warmer, kurzer Nonna-Satz im Format "Aus [einfache Zutaten] hast du etwas gemacht, das nach einer echten Trattoria schmeckt." (sonst leerer String).
+${GAMIFICATION_FEWSHOT}`;
 }
 
 const SYSTEM_VISION = `Du analysierst ein Foto (Kühlschrank, Vorratsschrank, Küchentisch o.ä.) und erkennst ausschließlich Lebensmittel/Zutaten, die eindeutig auf dem Bild zu erkennen sind.
@@ -1423,12 +1562,14 @@ Arbeite NUR dieses eine Rezept vollständig aus. Kompakt: max. 7 Schritte, jeder
 JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
 {"titel":"...","konzept":"1 Satz","zutatenanalyse":"1-2 Sätze","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1-2 Sätze","geschmacksprofil":"1-2 Sätze"}
 Bei zählbaren Zutaten (Eier, Zehen, Stangen, Dosen …): "einheit":null und die Zähleinheit steckt im "name" (z. B. "große Eier" statt Name "Ei" + Einheit "Stück").
-PFLICHT pro Schritt: prüfe jeden einzelnen Schritt darauf, ob er eine Zeitdauer enthält oder impliziert (kochen, köcheln, backen, braten, anbraten, ruhen lassen, ziehen lassen, marinieren, aufgehen lassen, abkühlen, blanchieren, dünsten, frittieren usw.) – wenn ja, MUSS "timer_seconds" die Dauer in Sekunden enthalten (nie null lassen, auch grobe Zeitangaben wie "einige Minuten" mit einem plausiblen Sekundenwert füllen). Nur wenn ein Schritt WIRKLICH keine Zeitkomponente hat (z. B. "Zwiebel schälen"), bleibt "timer_seconds" null. "requires_stove":true nur, wenn der Schritt am Herd/Ofen aktiv beaufsichtigt werden muss.`;
+PFLICHT pro Schritt: prüfe jeden einzelnen Schritt darauf, ob er eine Zeitdauer enthält oder impliziert (kochen, köcheln, backen, braten, anbraten, ruhen lassen, ziehen lassen, marinieren, aufgehen lassen, abkühlen, blanchieren, dünsten, frittieren usw.) – wenn ja, MUSS "timer_seconds" die Dauer in Sekunden enthalten (nie null lassen, auch grobe Zeitangaben wie "einige Minuten" mit einem plausiblen Sekundenwert füllen). Nur wenn ein Schritt WIRKLICH keine Zeitkomponente hat (z. B. "Zwiebel schälen"), bleibt "timer_seconds" null. "requires_stove":true nur, wenn der Schritt am Herd/Ofen aktiv beaufsichtigt werden muss.
+${gamificationSchemaPrompt()}`;
     const data = await askClaude(prompt, systemChefForMood(), 1600, null, 'recipe_generated');
     if(!data.titel || !data.schritte) throw new Error('Schema: Rezeptfelder fehlen');
     data.basisPersonen = parsePersonCount(S.answers); // lokale Nutzerangabe ist die verlässliche Quelle, nicht die Modellantwort
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
     data.schritte = (data.schritte||[]).map(normalizeStep);
+    validateRecipeMetadata(data);
     resetCollapseState(data);
     g.detail = data; g.step='detail';
     await logHistory(data);
@@ -1877,6 +2018,10 @@ function recipeHTML(r, backFn){
   }).join('')}
   ${r.anrichten?`<div class="sec-label collapsible" onclick="toggleRecipeSection('plating')">Anrichten<span class="collapse-hint">${collapse.plating?'▸ zeigen':'▾ verbergen'}</span></div>${collapse.plating?'':`<div class="card"><p style="font-size:14.5px;line-height:1.55">${esc(r.anrichten)}</p></div>`}`:''}
   ${r.geschmacksprofil?`<div class="sec-label collapsible" onclick="toggleRecipeSection('flavor')">Warum es schmeckt<span class="collapse-hint">${collapse.flavor?'▸ zeigen':'▾ verbergen'}</span></div>${collapse.flavor?'':`<p style="font-size:14.5px;line-height:1.55;color:var(--muted)">${esc(r.geschmacksprofil)}</p>`}`:''}
+  ${r.technique_tags?(r._cooked
+    ? `<div class="row" style="margin-top:var(--s4)"><button class="btn ghost" disabled style="flex:1">✓ Als gekocht markiert</button><button class="btn warm" style="flex:1" onclick="openShareFlow()">📸 Foto teilen</button></div>`
+    : `<button class="btn warm" style="margin-top:var(--s4)" onclick="handleMarkAsCooked()">👩‍🍳 Ich hab’s gekocht!</button>`
+  ):''}
   <p class="buon-appetito">${BUON_APPETITO[S.mood]||BUON_APPETITO.lieblich}</p>
   <div style="height:var(--s5)"></div>`;
 }
@@ -2262,12 +2407,14 @@ ${S.answers?`Kontext zum Nutzer:\n${answersText(S.answers)}`:''}
 ${dietaryConstraintsText()}${kitchenStaplesText()}
 JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
 {"titel":"...","konzept":"1 Satz","zutatenanalyse":"1 Satz","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1 Satz","geschmacksprofil":"1 Satz"}
-Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name". PFLICHT pro Schritt: prüfe jeden Schritt auf eine Zeitdauer (kochen, köcheln, backen, braten, ruhen, ziehen lassen, marinieren usw.) – wenn vorhanden, MUSS "timer_seconds" die Dauer in Sekunden enthalten (nie null lassen), sonst null. "requires_stove":true nur bei aktiver Beaufsichtigung am Herd/Ofen.`;
+Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name". PFLICHT pro Schritt: prüfe jeden Schritt auf eine Zeitdauer (kochen, köcheln, backen, braten, ruhen, ziehen lassen, marinieren usw.) – wenn vorhanden, MUSS "timer_seconds" die Dauer in Sekunden enthalten (nie null lassen), sonst null. "requires_stove":true nur bei aktiver Beaufsichtigung am Herd/Ofen.
+${gamificationSchemaPrompt()}`;
     const data = await askClaude(prompt, systemChefForMood(), 1600, null, 'meal_recipe_generated');
     if(!data.titel) throw new Error('Schema: Rezeptfelder fehlen');
     data.basisPersonen = parsePersonCount(S.answers);
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
     data.schritte = (data.schritte||[]).map(normalizeStep);
+    validateRecipeMetadata(data);
     resetCollapseState(data);
     S.mp.detail = data; S.mp.step='detail';
     await logHistory(data);
@@ -2599,6 +2746,84 @@ function openProfile(){
     <div class="sheet" id="profileSheet">${profileMainHTML()}</div>
   </div>`;
 }
+function progressSectionHTML(){
+  const tier = getCurrentTier(S.progress.totalPoints);
+  const tierIdx = TIERS.findIndex(t=>t.id===tier.id);
+  const nextTier = TIERS[tierIdx+1];
+  const streak = calculateStreak(S.progress.cookedDates);
+  const techEntries = Object.entries(S.progress.techniqueLevels||{}).filter(([,n])=>n>0);
+  return `
+      <div class="sec-label" style="margin-top:var(--s5)">Dein Fortschritt</div>
+      <div class="card" style="margin-bottom:var(--s3)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s2)">
+          <b style="font-family:var(--display);font-size:16px;color:var(--blue-700)">${esc(tier.label)}</b>
+          <span class="usage-note" style="margin:0">${S.progress.totalPoints} Punkte</span>
+        </div>
+        ${nextTier?`<p class="usage-note" style="text-align:left;margin:0 0 var(--s2)">Noch ${nextTier.minPoints - S.progress.totalPoints} Punkte bis „${esc(nextTier.label)}“</p>`:`<p class="usage-note" style="text-align:left;margin:0 0 var(--s2)">Höchste Stufe erreicht – complimenti!</p>`}
+        ${streak>=2?`<p class="usage-note" style="text-align:left;margin:0 0 var(--s2)">🔥 ${streak} Tage in Folge gekocht</p>`:''}
+        ${techEntries.length?`<div class="chips">${techEntries.map(([id,n])=>{const t=TECHNIQUE_TAXONOMY.find(x=>x.id===id); return `<span class="tag">${esc(t?t.label:id)} ×${n}</span>`;}).join('')}</div>`:`<p class="usage-note" style="text-align:left;margin:0">Koch dein erstes Rezept, um Fortschritt zu sammeln.</p>`}
+      </div>
+      <button class="btn ghost" style="margin-bottom:var(--s3)" onclick="openSecretRecipes()">🔒 Geheimrezepte${tier.id==='cuoco_di_famiglia'?'':' (ab „Cuoco di famiglia“)'}</button>`;
+}
+/* ============ GEHEIMREZEPTE (an Gamification-Tier gekoppelt, nicht an Pro/Famiglia) ============ */
+const SECRET_RECIPE_PROMPTS = [
+  { label:'🍝 Das Sonntagsrezept der Familie', theme:'ein besonderes Sonntagsessen, wie es seit Generationen in der Familie weitergegeben wird' },
+  { label:'🎄 Das Fest-Rezept', theme:'ein festliches Gericht für besondere Anlässe, das Nonna normalerweise geheim hält' },
+  { label:'🌙 Das späte Trostgericht', theme:'ein Trostgericht für späte Stunden, das Nonna sonst niemandem verrät' }
+];
+function openSecretRecipes(){
+  const tier = getCurrentTier(S.progress.totalPoints);
+  const unlocked = tier.id === 'cuoco_di_famiglia';
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="sheet">
+      <h2 style="font-family:var(--serif);font-style:italic">Nonnas Geheimrezepte</h2>
+      ${unlocked ? `
+      <p class="sub" style="margin-bottom:var(--s4)">Die Rezepte, die Nonna sonst nur der Familie zeigt. Wähl eine Richtung, dann schreibt sie dir eins auf.</p>
+      <div class="stack">
+        ${SECRET_RECIPE_PROMPTS.map((s,i)=>`<button class="btn ghost" onclick="generateSecretRecipe(${i})">${esc(s.label)}</button>`).join('')}
+      </div>` : `
+      <div class="locked card" style="min-height:180px">
+        <div style="filter:blur(3px);opacity:.6">
+          <div class="day-card"><h3>???</h3><p style="padding:var(--s3) 0">Ein geheimes Familienrezept wartet hier auf dich.</p></div>
+        </div>
+        <div class="lock-cover">
+          <span class="badge">🔒 Cuoco di famiglia</span>
+          <p style="font-size:14px;line-height:1.5">Noch ${Math.max(0, TIERS[2].minPoints - S.progress.totalPoints)} Punkte, dann öffnet sich Nonnas Geheimschublade – einfach weiterkochen und mit „Ich hab's gekocht" bestätigen.</p>
+        </div>
+      </div>`}
+      <button class="btn ghost" style="margin-top:var(--s4)" onclick="closeModal()">Schließen</button>
+    </div>
+  </div>`;
+}
+async function generateSecretRecipe(i){
+  const theme = SECRET_RECIPE_PROMPTS[i].theme;
+  closeModal();
+  goTab('cook'); S.gen.step='loadingDetail'; render();
+  try{
+    const prompt = `Der Nutzer hat gerade die Stufe "Cuoco di famiglia" erreicht und darf jetzt eines deiner Geheimrezepte sehen.
+Thema: ${theme}.
+${S.gen.ingredients.length?`Zutaten, die er gerade hat (nutze sie wenn sinnvoll, sonst schlage passende vor): ${S.gen.ingredients.join(', ')}`:'Schlage passende Zutaten selbst vor.'}
+${S.answers?`Kontext zum Nutzer:\n${answersText(S.answers)}`:''}
+${dietaryConstraintsText()}${kitchenStaplesText()}
+Arbeite EIN vollständiges, besonderes Rezept aus, das sich wirklich wie ein gehütetes Familiengeheimnis anfühlt. Kompakt: max. 7 Schritte, jeder Schritt max. 2 Sätze.
+JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
+{"titel":"...","konzept":"1 Satz","zutatenanalyse":"1-2 Sätze","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1-2 Sätze","geschmacksprofil":"1-2 Sätze"}
+Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name". PFLICHT pro Schritt: Zeitdauer erkennen und in "timer_seconds" (Sekunden) angeben, sonst null. "requires_stove":true nur bei aktiver Beaufsichtigung am Herd/Ofen.
+${gamificationSchemaPrompt()}`;
+    const data = await askClaude(prompt, systemChefForMood(), 1600, null, 'secret_recipe_generated');
+    if(!data.titel || !data.schritte) throw new Error('Schema: Rezeptfelder fehlen');
+    data.basisPersonen = parsePersonCount(S.answers);
+    data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
+    data.schritte = (data.schritte||[]).map(normalizeStep);
+    validateRecipeMetadata(data);
+    resetCollapseState(data);
+    S.gen.detail = data; S.gen.step='detail';
+    await logHistory(data);
+    track('secret_recipe_opened', {titel:data.titel});
+  }catch(e){ S.lastErr = S.lastErr||e.message; S.gen.step='error'; S.gen.retry=`generateSecretRecipe(${i})`; }
+  render();
+}
 function profileMainHTML(){
   const left=usageLeft();
   return `
@@ -2608,6 +2833,7 @@ function profileMainHTML(){
       <div class="toggle"><div><b style="font-size:15px">Konto</b><p style="font-size:13px;color:var(--muted)">${S.account?esc(S.account.name)+' · '+esc(S.account.mail):'Nicht angemeldet'}</p></div>
         ${S.account?'<button class="chip-btn" onclick="logoutAccount()">Abmelden</button>':''}</div>
       <div class="toggle"><div><b style="font-size:15px">Gratis-Runden</b><p style="font-size:13px;color:var(--muted)">${S.pro?'Unbegrenzt mit Pro':S.account?`Noch ${left} von ${FREE_LIMIT} in dieser Woche`:'Anmeldung erforderlich'}</p></div></div>
+      ${progressSectionHTML()}
 
       <div class="sec-label" style="margin-top:var(--s5)">Deine 5 Antworten</div>
       ${S.answers ? QUESTIONS.map((q,i)=>`
@@ -2807,6 +3033,128 @@ function preferenceProfileText(){
 async function toggleProSwitch(){ S.pro=!S.pro; await sset('nonna:pro',S.pro); openProfile(); render(); }
 async function clearAnswers(){ S.answers=null; await sset('nonna:answers',null); openProfile(); }
 function closeModal(){ el('modal').innerHTML=''; }
+
+/* ============ GAMIFICATION: FOTO-OVERLAY + SOCIAL SHARE ============
+   Kein Netzwerkaufruf in diesem Flow – Canvas-Overlay lokal im Browser, Teilen über die
+   native Web-Share-API des Betriebssystems (deckt Instagram/WhatsApp/Pinterest-App etc.
+   über das native Share-Sheet ab). Kein Pinterest-Extra-Button: der bräuchte eine öffentlich
+   erreichbare Bild-URL, dafür gibt es keine passende bestehende Infrastruktur – siehe Hinweis
+   im Übergabetext. */
+function openShareFlow(){
+  const r = getCurrentRecipe();
+  if(!r) return;
+  S.shareFlow = {open:true, recipe:r, blob:null, previewUrl:null, state:'idle', errorMsg:null};
+  renderShareFlow();
+}
+function closeShareFlow(){
+  if(S.shareFlow.previewUrl) URL.revokeObjectURL(S.shareFlow.previewUrl);
+  S.shareFlow = {open:false, recipe:null, blob:null, previewUrl:null, state:'idle', errorMsg:null};
+  closeModal();
+}
+function renderShareFlow(){
+  const sf = S.shareFlow;
+  el('modal').innerHTML = `
+  <div class="overlay" onclick="if(event.target===this)closeShareFlow()">
+    <div class="sheet" style="text-align:center">
+      <h2 style="font-family:var(--serif);font-style:italic">Zeig, was du gekocht hast</h2>
+      <p class="sub" style="margin-bottom:var(--s4)">Mach ein Foto von deinem Gericht – Nonna klebt ihr Logo drauf, dann kannst du es direkt teilen.</p>
+      <input type="file" id="dishPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="handleDishPhoto(this)">
+      <button class="btn warm" onclick="el('dishPhotoInput').click()">📷 Foto aufnehmen/auswählen</button>
+      ${sf.state==='loading'?`<p class="usage-note">Bild wird vorbereitet …</p>`:''}
+      ${sf.state==='error'?`<p class="usage-note" style="color:var(--bad)">${esc(sf.errorMsg||'Foto konnte nicht verarbeitet werden.')}</p>`:''}
+      ${sf.state==='saved'?`<p class="usage-note">${esc(sf.errorMsg||'Bild gespeichert.')}</p>`:''}
+      ${sf.state==='ready' && sf.previewUrl?`
+      <img src="${sf.previewUrl}" style="width:100%;border-radius:16px;margin-top:var(--s3)" alt="Vorschau">
+      <button class="btn" style="margin-top:var(--s3)" onclick="doShareResult()">↗ Teilen</button>`:''}
+      <button class="btn ghost" style="margin-top:var(--s3)" onclick="closeShareFlow()">Schließen</button>
+    </div>
+  </div>`;
+}
+async function handleDishPhoto(inputEl){
+  const file = inputEl.files && inputEl.files[0];
+  inputEl.value = '';
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ S.shareFlow.state='error'; S.shareFlow.errorMsg='Das scheint kein Bild zu sein.'; renderShareFlow(); return; }
+  S.shareFlow.state='loading'; renderShareFlow();
+  try{
+    const r = S.shareFlow.recipe;
+    const celebrationLine = (r && r.transformation_moment && r.celebration_text)
+      ? r.celebration_text
+      : `Ich hab ${esc((r && (r.dish_name||r.titel))||'etwas Gutes')} gekocht – buon appetito!`;
+    const blob = await createShareImage(file, 'nonna-header-logo@2x.png', celebrationLine);
+    if(S.shareFlow.previewUrl) URL.revokeObjectURL(S.shareFlow.previewUrl);
+    S.shareFlow.blob = blob;
+    S.shareFlow.previewUrl = URL.createObjectURL(blob);
+    S.shareFlow.state = 'ready';
+    renderShareFlow();
+  }catch(e){
+    S.shareFlow.state='error';
+    S.shareFlow.errorMsg = 'Foto konnte nicht verarbeitet werden: '+(e.message||e);
+    renderShareFlow();
+  }
+}
+function loadImage(src){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = ()=>resolve(img);
+    img.onerror = ()=>reject(new Error('Bild konnte nicht geladen werden'));
+    img.src = src;
+  });
+}
+function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+  const words = text.split(' ');
+  let line = '';
+  const lines = [];
+  for(const word of words){
+    const test = line + word + ' ';
+    if(ctx.measureText(test).width > maxWidth && line !== ''){ lines.push(line); line = word + ' '; }
+    else line = test;
+  }
+  lines.push(line);
+  lines.forEach((l,i)=>ctx.fillText(l.trim(), x, y + i*lineHeight));
+}
+async function createShareImage(userPhotoFile, logoUrl, celebrationText){
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const photoUrl = URL.createObjectURL(userPhotoFile);
+  let userImg;
+  try{ userImg = await loadImage(photoUrl); } finally { URL.revokeObjectURL(photoUrl); }
+  canvas.width = userImg.width;
+  canvas.height = userImg.height;
+  ctx.drawImage(userImg, 0, 0);
+  try{
+    const logoImg = await loadImage(logoUrl);
+    const logoWidth = canvas.width * 0.28;
+    const logoHeight = logoWidth * (logoImg.height / logoImg.width);
+    ctx.drawImage(logoImg, canvas.width - logoWidth - 24, canvas.height - logoHeight - 24, logoWidth, logoHeight);
+  }catch(e){ /* Logo optional - Foto funktioniert auch ohne */ }
+  if(celebrationText){
+    const fontSize = Math.max(18, Math.round(canvas.width*0.032));
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillStyle = 'white';
+    ctx.shadowColor = 'rgba(0,0,0,.85)';
+    ctx.shadowBlur = 8;
+    wrapText(ctx, celebrationText, canvas.width*0.05, canvas.height*0.9, canvas.width*0.6, fontSize*1.25);
+  }
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+}
+async function doShareResult(){
+  const blob = S.shareFlow.blob;
+  if(!blob) return;
+  const file = new File([blob], 'nonna-gericht.jpg', {type:'image/jpeg'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({ files:[file], title:'Nonna', text: (S.shareFlow.recipe && S.shareFlow.recipe.celebration_text) || 'Mit Nonna gekocht' }); }
+    catch(e){ /* Nutzer hat den Share-Dialog abgebrochen - kein Fehler */ }
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'nonna-gericht.jpg';
+    document.body.appendChild(a); a.click(); a.remove();
+    S.shareFlow.state = 'saved';
+    S.shareFlow.errorMsg = 'Bild gespeichert – lade es manuell in Instagram/Facebook/Pinterest hoch.';
+    renderShareFlow();
+  }
+}
 
 /* ============ GESTAFFELTE ONBOARDING-POP-UPS (Abschnitt 8) ============ */
 function onboardingModalHTML(heading, text, ctaLabel, ctaOnclick, popupKey){
