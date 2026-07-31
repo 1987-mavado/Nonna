@@ -1136,7 +1136,7 @@ function cookInput(){
   return `
   <h1 class="screen" style="font-size:clamp(17px,5.4vw,26px);white-space:nowrap;margin-bottom:var(--s5)">Was hast du denn da, mein Schatz?</h1>
   <div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">Kühlschrank auf, alles auf den Tisch. Ich mach was draus – versprochen.</div></div>
-  <p class="sub" style="font-size:13.5px;margin-bottom:var(--s3)">${esc([...S.profile.kitchenStaples, ...S.profile.spices].join(', '))} gelten bei Nonna als vorhanden – die musst du nicht extra eintragen (änderbar unter ⚙️ → Küchenschrank). Alles andere bitte unten dazuschreiben.</p>
+  <p class="sub" style="font-size:13.5px;margin-bottom:var(--s3)">Alle Zutaten, die du eh zuhause hast, kannst du unter Einstellungen eintragen.</p>
   <textarea class="field" id="ingInput" rows="2" placeholder="z. B. Hähnchen, Zucchini, Feta …"></textarea>
   <div class="row" style="margin-top:var(--s2)">
     <button class="btn ghost" onclick="addIngredients()">Zutaten hinzufügen</button>
@@ -1344,12 +1344,13 @@ Arbeite NUR dieses eine Rezept vollständig aus. Kompakt: max. 7 Schritte, jeder
 JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
 {"titel":"...","konzept":"1 Satz","zutatenanalyse":"1-2 Sätze","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1-2 Sätze","geschmacksprofil":"1-2 Sätze"}
 Bei zählbaren Zutaten (Eier, Zehen, Stangen, Dosen …): "einheit":null und die Zähleinheit steckt im "name" (z. B. "große Eier" statt Name "Ei" + Einheit "Stück").
-Pro Schritt: "timer_seconds" nur setzen, wenn der Schritt eine konkrete Zeitdauer hat (z. B. köcheln, backen, ruhen) – sonst null. "requires_stove":true nur, wenn der Schritt am Herd/Ofen aktiv beaufsichtigt werden muss.`;
+PFLICHT pro Schritt: prüfe jeden einzelnen Schritt darauf, ob er eine Zeitdauer enthält oder impliziert (kochen, köcheln, backen, braten, anbraten, ruhen lassen, ziehen lassen, marinieren, aufgehen lassen, abkühlen, blanchieren, dünsten, frittieren usw.) – wenn ja, MUSS "timer_seconds" die Dauer in Sekunden enthalten (nie null lassen, auch grobe Zeitangaben wie "einige Minuten" mit einem plausiblen Sekundenwert füllen). Nur wenn ein Schritt WIRKLICH keine Zeitkomponente hat (z. B. "Zwiebel schälen"), bleibt "timer_seconds" null. "requires_stove":true nur, wenn der Schritt am Herd/Ofen aktiv beaufsichtigt werden muss.`;
     const data = await askClaude(prompt, systemChefForMood(), 1600);
     if(!data.titel || !data.schritte) throw new Error('Schema: Rezeptfelder fehlen');
     data.basisPersonen = parsePersonCount(S.answers); // lokale Nutzerangabe ist die verlässliche Quelle, nicht die Modellantwort
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
     data.schritte = (data.schritte||[]).map(normalizeStep);
+    resetCollapseState(data);
     g.detail = data; g.step='detail';
     await logHistory(data);
     track('recipe_detail_opened', {titel:data.titel});
@@ -1470,7 +1471,7 @@ function renderReadAloud(){
   const step = steps[i];
   const key = timerKeyFor(i);
   const t = S.timers[key];
-  const voiceOn = S.mood==='eile' && speechRecognitionAvailable();
+  const voiceOn = speechRecognitionAvailable();
   el('modal').innerHTML = `
   <div class="overlay" onclick="if(event.target===this)closeReadAloud()">
     <div class="sheet" style="text-align:center">
@@ -1495,6 +1496,26 @@ function renderReadAloud(){
     </div>
   </div>`;
 }
+/* ============ TTS-STIMMAUSWAHL (Abschnitt 12, überarbeitet) ============
+   Statt Tonhöhe/Tempo blind an der Standardstimme zu verbiegen: aus den auf dem Gerät
+   tatsächlich installierten Stimmen gezielt die beste deutsche weibliche Option auswählen,
+   Reihenfolge nach dokumentierter Qualität (Readium Speech / web-speech-recommended-voices,
+   github.com/readium/speech/blob/main/json/de.json). Diese Stimmen klingen bei Standard-
+   rate/pitch (1/1) bereits natürlich – dort wird NICHT künstlich verstellt. Nur wenn keine
+   dieser bekannten Stimmen verfügbar ist, greift die generische wärmer/langsamer-Interimslösung. */
+const GERMAN_VOICE_PREFS = ['Seraphina','Amala','Katja','Ingrid','Leni','Google Deutsch','Petra','Anna','Helena','Hedda'];
+function pickBestGermanVoice(){
+  if(!('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if(!voices || !voices.length) return null;
+  const de = voices.filter(v=>v.lang && v.lang.toLowerCase().startsWith('de'));
+  for(const label of GERMAN_VOICE_PREFS){
+    const match = de.find(v=>v.name && v.name.toLowerCase().includes(label.toLowerCase()));
+    if(match) return {voice:match, rate:1, pitch:1};
+  }
+  if(de.length) return {voice:de[0], rate:0.92, pitch:1.05};
+  return null;
+}
 function fmtTimerSpoken(sec){
   if(sec<60) return `${sec} Sekunden`;
   const m=Math.floor(sec/60), rest=sec%60;
@@ -1509,8 +1530,8 @@ function speakCurrentStep(){
   if(!step) return;
   window.speechSynthesis.cancel();
   let text = step.text;
-  const voiceOn = S.mood==='eile' && speechRecognitionAvailable();
-  if(S.mood==='eile' && step.timer_seconds){
+  const voiceOn = speechRecognitionAvailable();
+  if(step.timer_seconds){
     text += ` ${fmtTimerSpoken(step.timer_seconds)}${voiceOn?', sag Timer, wenn’s losgehen soll.':'. Timer bei Bedarf manuell starten.'}`;
     if(voiceOn && !S.voiceExplained){
       text = `Kurz zur Sprachsteuerung: sag jederzeit Weiter, Zurück, Nochmal oder Timer, ich höre mit. ` + text;
@@ -1520,8 +1541,9 @@ function speakCurrentStep(){
   }
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'de-DE';
-  u.rate = 0.92; // Interimslösung ohne Charakterstimme: etwas langsamer und wärmer als Standard
-  u.pitch = 1.05;
+  const picked = pickBestGermanVoice();
+  if(picked){ u.voice = picked.voice; u.rate = picked.rate; u.pitch = picked.pitch; }
+  else { u.rate = 0.92; u.pitch = 1.05; } // Fallback ohne jede deutsche Stimme im System
   window.speechSynthesis.speak(u);
 }
 function ttsNextStep(){
@@ -1545,7 +1567,8 @@ function closeReadAloud(){
   closeModal();
 }
 
-/* ============ SPRACHSTEUERUNG SCHRITTNAVIGATION (Abschnitt 11, nur In-Eile) ============
+/* ============ SPRACHSTEUERUNG SCHRITTNAVIGATION (Abschnitt 11+5, immer aktiv im Vorlese-Modus) ============
+   Nicht mehr an In-Eile gekoppelt – läuft in jedem Gemütszustand, sobald der Vorlese-Modus aktiv ist.
    Fester Wortsatz statt freiem Diktat: Weiter/Zurück/Nochmal/Timer. Tap-Bedienung im
    Vorlese-Overlay bleibt immer der Pflicht-Fallback, Sprachsteuerung ist rein additiv. */
 let _recognition = null;
@@ -1557,7 +1580,7 @@ function updateVoiceIndicator(){
   if(ind) ind.style.display = _voiceListening ? 'flex' : 'none';
 }
 function startVoiceControl(){
-  if(S.mood!=='eile' || !speechRecognitionAvailable() || _recognition) return;
+  if(!speechRecognitionAvailable() || _recognition) return;
   const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
   const rec = new Rec();
   rec.lang = 'de-DE';
@@ -1573,7 +1596,7 @@ function startVoiceControl(){
   rec.onerror = ()=>{};
   rec.onend = ()=>{
     _voiceListening = false; updateVoiceIndicator();
-    if(_recognition===rec && S.tts.active && S.mood==='eile'){
+    if(_recognition===rec && S.tts.active){
       try{ rec.start(); _voiceListening=true; updateVoiceIndicator(); }catch(e){}
     }
   };
@@ -1607,8 +1630,13 @@ function startVoiceTimer(){
 }
 
 /* Rezept-Detailansicht */
+function resetCollapseState(r){
+  if(!r) return;
+  r._collapse = {intro:S.mood==='eile', flavor:S.mood==='eile', plating:S.mood==='eile'};
+  return r._collapse;
+}
 function ensureCollapseState(r){
-  if(!r._collapse) r._collapse = {intro:S.mood==='eile', flavor:S.mood==='eile', plating:S.mood==='eile'};
+  if(!r._collapse) return resetCollapseState(r);
   return r._collapse;
 }
 function toggleRecipeSection(key){
@@ -1630,7 +1658,7 @@ function recipeHTML(r, backFn){
   <div class="star-rating" role="group" aria-label="Rezept bewerten">
     ${[1,2,3,4,5].map(n=>`<button onclick="setRecipeRating(${n})" aria-label="${n} Stern${n===1?'':'e'}" class="${(r.rating||0)>=n?'on':''}">★</button>`).join('')}
   </div>
-  ${r.zutatenanalyse?`<div class="nonna-says" onclick="toggleRecipeSection('intro')" style="cursor:pointer" title="${collapse.intro?'Antippen zum Anzeigen':'Antippen zum Verbergen'}"><div class="nonna-face">👵</div><div class="bubble">${collapse.intro?'Nonnas Kommentar antippen …':esc(r.zutatenanalyse)}</div></div>`:''}
+  ${r.zutatenanalyse?`<div class="sec-label collapsible" style="margin-top:0" onclick="toggleRecipeSection('intro')">Nonna sagt<span class="collapse-hint">${collapse.intro?'▸ zeigen':'▾ verbergen'}</span></div>${collapse.intro?'':`<div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">${esc(r.zutatenanalyse)}</div></div>`}`:''}
   ${r.basisPersonen?`
   <div class="pstepper">
     <button onclick="changeRecipePersonen(-1)" ${personen<=1?'disabled':''} aria-label="Weniger Personen">–</button>
@@ -1775,7 +1803,7 @@ function viewHistory(){
     </div>`).join('')}
   </div>`}`;
 }
-function openHistDetail(i){ S.hist.open=S.history[i]; S.hist.view='detail'; render(); }
+function openHistDetail(i){ S.hist.open=S.history[i]; S.hist.view='detail'; resetCollapseState(S.hist.open); render(); }
 function closeHistDetail(){ S.hist.view='list'; S.hist.open=null; render(); }
 
 /* ============ STRANG 2: FAVORITEN ============ */
@@ -1798,7 +1826,7 @@ function viewFav(){
     </div>`).join('')}
   </div>`;
 }
-function openFavDetail(i){ S.fav.open=S.favs[i]; S.fav.view='detail'; render(); }
+function openFavDetail(i){ S.fav.open=S.favs[i]; S.fav.view='detail'; resetCollapseState(S.fav.open); render(); }
 function closeFavDetail(){ S.fav.view='list'; S.fav.open=null; render(); }
 
 /* ============ STRANG 3: MEAL-PREP (PRO) ============ */
@@ -2052,12 +2080,13 @@ ${S.answers?`Kontext zum Nutzer:\n${answersText(S.answers)}`:''}
 ${dietaryConstraintsText()}${kitchenStaplesText()}
 JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
 {"titel":"...","konzept":"1 Satz","zutatenanalyse":"1 Satz","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1 Satz","geschmacksprofil":"1 Satz"}
-Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name". Pro Schritt: "timer_seconds" nur bei konkreter Zeitdauer, sonst null. "requires_stove":true nur bei aktiver Beaufsichtigung am Herd/Ofen.`;
+Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name". PFLICHT pro Schritt: prüfe jeden Schritt auf eine Zeitdauer (kochen, köcheln, backen, braten, ruhen, ziehen lassen, marinieren usw.) – wenn vorhanden, MUSS "timer_seconds" die Dauer in Sekunden enthalten (nie null lassen), sonst null. "requires_stove":true nur bei aktiver Beaufsichtigung am Herd/Ofen.`;
     const data = await askClaude(prompt, systemChefForMood(), 1600);
     if(!data.titel) throw new Error('Schema: Rezeptfelder fehlen');
     data.basisPersonen = parsePersonCount(S.answers);
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
     data.schritte = (data.schritte||[]).map(normalizeStep);
+    resetCollapseState(data);
     S.mp.detail = data; S.mp.step='detail';
     await logHistory(data);
   }catch(e){ S.lastErr = S.lastErr||e.message; S.mp.step='error'; }
@@ -2141,6 +2170,7 @@ function toggleSchoolShopping(){ S.sc.showShopping = !S.sc.showShopping; render(
 function openLesson(i){
   S.sc.lessonIdx=i; S.sc.phase='intro'; S.sc.quizIdx=0; S.sc.quizAnswered=null; S.sc.correct=0;
   S.sc.lesson = LESSON_CONTENT[S.sc.level][i];
+  if(S.sc.lesson && S.sc.lesson.praxisrezept) resetCollapseState(S.sc.lesson.praxisrezept);
   S.sc.view='lesson';
   render();
 }
@@ -2592,6 +2622,11 @@ function maybeShowOnboardingPopup(){
   render();
   track('screen_view', {screen_name:S.tab});
   maybeShowOnboardingPopup();
+  /* Stimmen früh anfordern, da getVoices() in manchen Browsern erst nach 'voiceschanged' gefüllt ist */
+  if('speechSynthesis' in window){
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = ()=>{ window.speechSynthesis.getVoices(); };
+  }
 })();
 </script>
 </body>
