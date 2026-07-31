@@ -11,4 +11,4 @@ alter table usage_events enable row level security;
 create policy "Allow inserts from service role"
   on usage_events for insert
   to service_role
-  using (true);
+  with check (true);
