@@ -301,7 +301,7 @@ const S = {
   tts:{active:false, stepIndex:0},
   visits:0, onboarding:{popup0:false, popup1:false, popup2:false, popup3:false},
   profilePhoto:{target:null, state:'idle', errorMsg:''},
-  mood:'lieblich', voiceExplained:false,
+  mood:'lieblich', voiceExplained:false, anonId:null,
   loadTimer:null, lastErr:null
 };
 const FREE_LIMIT = 2;
@@ -841,10 +841,11 @@ async function sset(key,val){
 }
 
 async function loadAll(){
-  const [pro,usage,favs,history,answers,mealplan,school,account,schoolLevel,profile,onboarding,visits,mood,voiceExplained] = await Promise.all([
+  const [pro,usage,favs,history,answers,mealplan,school,account,schoolLevel,profile,onboarding,visits,mood,voiceExplained,anonId] = await Promise.all([
     sget('nonna:pro'), sget('nonna:usage'), sget('nonna:favorites'), sget('nonna:history'),
     sget('nonna:answers'), sget('nonna:mealplan'), sget('nonna:school'), sget('nonna:account'), sget('nonna:schoolLevel'),
-    sget('nonna:profile'), sget('nonna:onboarding'), sget('nonna:visits'), sget('nonna:mood'), sget('nonna:voiceExplained')
+    sget('nonna:profile'), sget('nonna:onboarding'), sget('nonna:visits'), sget('nonna:mood'), sget('nonna:voiceExplained'),
+    sget('nonna_anon_id')
   ]);
   S.pro = !!pro;
   S.usage = Array.isArray(usage)?usage:[];
@@ -876,6 +877,9 @@ async function loadAll(){
   await sset('nonna:visits', S.visits);
   if(mood==='lieblich'||mood==='streng'||mood==='eile') S.mood = mood;
   S.voiceExplained = !!voiceExplained;
+  /* Anonyme, geräte-stabile ID für anonymisiertes Nutzungs-Tracking (kein Klarname/Account-Bezug) */
+  if(anonId){ S.anonId = anonId; }
+  else { S.anonId = crypto.randomUUID(); await sset('nonna_anon_id', S.anonId); }
 }
 
 /* ============ API ============ */
@@ -1033,12 +1037,16 @@ function fmtMenge(n){
 const SUPABASE_URL = 'https://dgcubciacluzfvxnqzez.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnY3ViY2lhY2x1emZ2eG5xemV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTY1MDgsImV4cCI6MjA4OTMzMjUwOH0.rv6fkW5PBzCOelXk5YIatOyry3tidI-X-5RDEoPR1fI';
 
-async function askClaude(userPrompt, system=SYSTEM_CHEF, maxTokens=1400, image=null){
+async function askClaude(userPrompt, system=SYSTEM_CHEF, maxTokens=1400, image=null, eventType=null){
   const call = async (tokens)=>{
     /* Wichtig: KEIN AbortSignal – der Vorschau-Proxy kann das Objekt nicht klonen.
        Timeout deshalb über Promise.race. */
     let res;
     try{
+      const body = { prompt:userPrompt, system, maxTokens:tokens };
+      if(image) body.image = image;
+      if(S.anonId) body.anon_id = S.anonId;
+      if(eventType) body.event_type = eventType;
       const fetchP = fetch(SUPABASE_URL+'/functions/v1/ask-claude',{
         method:'POST',
         headers:{
@@ -1046,7 +1054,7 @@ async function askClaude(userPrompt, system=SYSTEM_CHEF, maxTokens=1400, image=n
           'apikey': SUPABASE_ANON_KEY,
           'Authorization':'Bearer '+SUPABASE_ANON_KEY
         },
-        body: JSON.stringify(image ? { prompt:userPrompt, system, maxTokens:tokens, image } : { prompt:userPrompt, system, maxTokens:tokens })
+        body: JSON.stringify(body)
       });
       const timeoutP = new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT')),60000));
       res = await Promise.race([fetchP, timeoutP]);
@@ -1257,7 +1265,7 @@ async function handlePhotoIngredients(inputEl){
     const base64 = await fileToBase64(file);
     const data = await askClaude(
       'Analysiere dieses Foto und liste alle klar erkennbaren Lebensmittel/Zutaten auf.\nJSON-Schema (exakt, Deutsch, sonst nichts): {"zutaten":["Paprika","Zwiebel"]}',
-      SYSTEM_VISION, 500, { media_type:file.type, data:base64 }
+      SYSTEM_VISION, 500, { media_type:file.type, data:base64 }, 'photo_ingredients_detected'
     );
     const found = Array.isArray(data.zutaten) ? data.zutaten.filter(x=>typeof x==='string' && x.trim()) : [];
     if(!found.length){
@@ -1346,7 +1354,7 @@ Entwickle daraus 5 unterschiedliche Gerichts-KONZEPTE (noch keine vollen Rezepte
 Falls eine Zutat des Nutzers wegen Diät/Allergie nicht verwendet werden kann: lass sie im Konzept weg/ersetze sie sinnvoll und nenne das kurz im Feld "ersetzt" (sonst leerer String).
 JSON-Schema (halte dich exakt daran, alles auf Deutsch, sehr kompakt):
 {"konzepte":[{"titel":"...","konzept":"1 knapper Satz, max. 10 Wörter","geschmacksprofil":"1 knapper Satz, max. 10 Wörter, Kern von Balance/Textur/Aroma","dauer":"z.B. 30 Min","schwierigkeit":"Einfach|Mittel|Anspruchsvoll","ersetzt":"kurzer Hinweis oder leerer String","ausreisser":false}]}`;
-    const data = await askClaude(prompt, systemChefForMood());
+    const data = await askClaude(prompt, systemChefForMood(), undefined, null, 'recipe_concepts_generated');
     if(!data.konzepte || !data.konzepte.length) throw new Error('Schema: "konzepte" fehlt');
     if(!S.pro) await consumeUsage();
     g.concepts = data.konzepte.slice(0,5);
@@ -1416,7 +1424,7 @@ JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, ke
 {"titel":"...","konzept":"1 Satz","zutatenanalyse":"1-2 Sätze","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1-2 Sätze","geschmacksprofil":"1-2 Sätze"}
 Bei zählbaren Zutaten (Eier, Zehen, Stangen, Dosen …): "einheit":null und die Zähleinheit steckt im "name" (z. B. "große Eier" statt Name "Ei" + Einheit "Stück").
 PFLICHT pro Schritt: prüfe jeden einzelnen Schritt darauf, ob er eine Zeitdauer enthält oder impliziert (kochen, köcheln, backen, braten, anbraten, ruhen lassen, ziehen lassen, marinieren, aufgehen lassen, abkühlen, blanchieren, dünsten, frittieren usw.) – wenn ja, MUSS "timer_seconds" die Dauer in Sekunden enthalten (nie null lassen, auch grobe Zeitangaben wie "einige Minuten" mit einem plausiblen Sekundenwert füllen). Nur wenn ein Schritt WIRKLICH keine Zeitkomponente hat (z. B. "Zwiebel schälen"), bleibt "timer_seconds" null. "requires_stove":true nur, wenn der Schritt am Herd/Ofen aktiv beaufsichtigt werden muss.`;
-    const data = await askClaude(prompt, systemChefForMood(), 1600);
+    const data = await askClaude(prompt, systemChefForMood(), 1600, null, 'recipe_generated');
     if(!data.titel || !data.schritte) throw new Error('Schema: Rezeptfelder fehlen');
     data.basisPersonen = parsePersonCount(S.answers); // lokale Nutzerangabe ist die verlässliche Quelle, nicht die Modellantwort
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
@@ -2083,7 +2091,7 @@ ${dietaryConstraintsText()}${kitchenStaplesText()}
 ${ci===0?`Erstelle zusätzlich eine gebündelte Prep-Session für den GESAMTEN Zeitraum (was wird einmal vorbereitet und mehrfach verwendet).`:'Feld "prepSession" als leeres Array zurückgeben.'}
 Sehr kompakt. JSON-Schema (exakt, Deutsch):
 {"prepSession":["max 5 kurze Punkte"],"plan":[{"tag":${von},"mahlzeit":"Frühstück|Mittag|Abend","titel":"...","kurzbeschreibung":"max 1 Satz","prepHinweis":"max 5 Wörter"}]}`;
-      const data = await askClaude(prompt, systemChefForMood(), 2000);
+      const data = await askClaude(prompt, systemChefForMood(), 2000, null, 'mealplan_generated');
       if(!data.plan) throw new Error('Schema: "plan" fehlt (Etappe '+(ci+1)+')');
       if(ci===0) prepSession = data.prepSession||[];
       plan = plan.concat(data.plan);
@@ -2255,7 +2263,7 @@ ${dietaryConstraintsText()}${kitchenStaplesText()}
 JSON-Schema (exakt, Deutsch, "menge" IMMER eine Zahl ohne Anführungszeichen, kein Text/Bruch):
 {"titel":"...","konzept":"1 Satz","zutatenanalyse":"1 Satz","basisPersonen":${parsePersonCount(S.answers)},"zutaten":[{"menge":200,"einheit":"g","name":"..."},{"menge":2,"einheit":null,"name":"große Eier"}],"schritte":[{"text":"...","timer_seconds":300,"requires_stove":true}],"anrichten":"1 Satz","geschmacksprofil":"1 Satz"}
 Bei zählbaren Zutaten: "einheit":null, Zähleinheit steckt im "name". PFLICHT pro Schritt: prüfe jeden Schritt auf eine Zeitdauer (kochen, köcheln, backen, braten, ruhen, ziehen lassen, marinieren usw.) – wenn vorhanden, MUSS "timer_seconds" die Dauer in Sekunden enthalten (nie null lassen), sonst null. "requires_stove":true nur bei aktiver Beaufsichtigung am Herd/Ofen.`;
-    const data = await askClaude(prompt, systemChefForMood(), 1600);
+    const data = await askClaude(prompt, systemChefForMood(), 1600, null, 'meal_recipe_generated');
     if(!data.titel) throw new Error('Schema: Rezeptfelder fehlen');
     data.basisPersonen = parsePersonCount(S.answers);
     data.zutaten = (data.zutaten||[]).map(z=>({...z, menge:Number(z.menge)}));
@@ -2718,7 +2726,7 @@ async function handleProfilePhoto(inputEl){
     const label = target==='staples' ? 'Grundzutaten (z. B. Öl, Essig, Wasser, Fond, Konserven)' : 'Gewürze/Kräuter';
     const data = await askClaude(
       `Analysiere dieses Foto und liste alle klar erkennbaren ${label} auf.\nJSON-Schema (exakt, Deutsch, sonst nichts): {"zutaten":["Öl","Essig"]}`,
-      SYSTEM_VISION, 500, { media_type:file.type, data:base64 }
+      SYSTEM_VISION, 500, { media_type:file.type, data:base64 }, 'photo_profile_items_detected'
     );
     const found = Array.isArray(data.zutaten) ? data.zutaten.filter(x=>typeof x==='string' && x.trim()) : [];
     if(!found.length){

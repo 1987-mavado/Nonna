@@ -3,6 +3,13 @@
 // Der eigentliche Anthropic-API-Key liegt NUR hier als Server-Secret
 // (Deno.env.get('ANTHROPIC_API_KEY')) und wird nie an den Client geschickt.
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+);
+
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*", // bei Bedarf auf https://nonna.cloud einschränken
   "Access-Control-Allow-Headers":
@@ -36,6 +43,8 @@ Deno.serve(async (req: Request) => {
     system?: string;
     maxTokens?: number;
     image?: { media_type?: string; data?: string };
+    anon_id?: string;
+    event_type?: string;
   };
   try {
     body = await req.json();
@@ -46,7 +55,7 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const { prompt, system, maxTokens, image } = body;
+  const { prompt, system, maxTokens, image, anon_id, event_type } = body;
   if (!prompt || typeof prompt !== "string") {
     return new Response(JSON.stringify({ error: { message: "Feld 'prompt' fehlt oder ist ungültig." } }), {
       status: 400,
@@ -98,6 +107,14 @@ Deno.serve(async (req: Request) => {
     });
 
     const data = await anthropicRes.json().catch(() => ({}));
+
+    if (anthropicRes.ok && anon_id) {
+      supabase
+        .from("usage_events")
+        .insert({ anon_id, event_type: event_type ?? "unknown" })
+        .then(() => {})
+        .catch((e: unknown) => console.error("Logging fehlgeschlagen:", e));
+    }
 
     return new Response(JSON.stringify(data), {
       status: anthropicRes.status,
