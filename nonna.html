@@ -335,36 +335,67 @@ function submitGateCode(){
 if(gateUnlocked()) hideGate();
 
 /* ============ EXAKTER FRAGEN-WORTLAUT ============ */
+/* Fest hinterlegte Formulierungen je Gemütszustand (keine KI-Generierung zur Laufzeit).
+   "value" ist der stabile, moodunabhängige Antwortwert (geht so an Claude und wird gespeichert);
+   "tMood" ist reine Zierde auf dem Button und darf sich mit dem Modus/Wechsel jederzeit ändern,
+   ohne gespeicherte Antworten zu verfälschen oder zu widersprechen. */
 const QUESTIONS = [
- {key:'skill', q:'Welches handwerkliche Geschick bringst du mit?', opts:[
-   {t:'Gerade Ausgezogen', s:'Einfach'},
-   {t:'Ich rocke die WG-Küche', s:'Mittel'},
-   {t:'Alles was Mama mir beigebracht hat', s:'Gut'},
-   {t:'Tim Raue wäre Stolz auf mich', s:''}]},
- {key:'kueche', q:'Welche Küche möchtest du kochen?', opts:[
-   {t:'Lass den Suppentopf kochen', s:''},
-   {t:'Gib mir Ein-Topf', s:''},
-   {t:'Alles für den Grill', s:''},
-   {t:'Alla Nonna (Wie bei Mama)', s:''},
-   {t:'Fine Dining', s:''}]},
- {key:'ausstattung', q:'Wie gut ist deine Küche ausgestattet?', opts:[
-   {t:'Das nötigste ist da', s:''},
-   {t:'Die Mitteleuropäische Standardküche', s:''},
-   {t:'Das wichtigste für Asien und Europa', s:''},
-   {t:'Alles, was es braucht', s:''}]},
- {key:'zeit', q:'Wie viel Zeit bringst du mit?', opts:[
-   {t:'Zack, Zack, wir haben doch keine Zeit!', s:'ca. 20 Minuten'},
-   {t:'Ich muss gleich wieder zur Arbeit', s:'ca. 30 Minuten'},
-   {t:'Ne Stunde bring ich schon mit.', s:'ca. 60 Minuten'},
-   {t:'Wir haben alle Zeit der Welt', s:'kein Zeitlimit'}]},
- {key:'personen', q:'Für wie viele Personen kochst du?', opts:[
-   {t:'Ich habe doch keine Freunde', s:'1 Person'},
-   {t:'Muss ich wirklich teilen?', s:'2 Personen'},
-   {t:'Alle guten Dinge sind 3', s:'3 Personen'},
-   {t:'4 auf einen Streich', s:'4 Personen'},
-   {t:'Ab wann beginnt eigentlich eine Großfamilie?', s:'5 Personen'}]}
+ {key:'skill', qMood:{
+   lieblich:'Sag mir, mein Schatz: Welches handwerkliche Geschick bringst du mit?',
+   eile:'Schnell, schnell – wie geschickt bist du eigentlich?',
+   streng:'Jetzt mal ehrlich: Was kannst du wirklich?'
+ }, opts:[
+   {value:'Einfach', tMood:{lieblich:'Grad mal Wasser kochen kann ich, mehr trau ich mir grad nicht zu', eile:'Wasser kochen, mehr nicht – frag nicht weiter, keine Zeit', streng:'Kaum mehr als Wasser kochen. Peinlich, aber wenigstens ehrlich.'}},
+   {value:'Mittel', tMood:{lieblich:'Pasta krieg ich hin, mach dich nicht lustig', eile:'Pasta ja, aber erklär mir nix, ich weiß es schon', streng:'Pasta ja, aber ordentlich ist was anderes – zeig’s mir.'}},
+   {value:'Gut', tMood:{lieblich:'Was Mamma mir beigebracht hat – frag ruhig nach, ich zeig’s dir', eile:'Mammas Rezepte im Kopf, kein Grund zur Sorge', streng:'Was Mamma mir beigebracht hat. Und das sitzt besser als bei dir.'}},
+   {value:'Profi', tMood:{lieblich:'Ich kann’s, pass auf, sonst lernst du noch was von mir', eile:'Profi, und zwar schneller als du gucken kannst', streng:'Ich kann’s, pass auf, sonst ersetze ich dich noch in der Küche.'}}
+ ]},
+ {key:'kueche', qMood:{
+   lieblich:'Und, welche Küche möchtest du kochen?',
+   eile:'Los, welche Küche soll’s sein – schnell entschieden!',
+   streng:'Welche Küche. Und diesmal mit Überzeugung.'
+ }, opts:[
+   {value:'Suppe', tMood:{lieblich:'Eine Suppe wie bei der Nonna am Sonntag – sei nicht so bescheiden', eile:'Suppe, aber ratzfatz, keine Diskussion', streng:'Suppe. Wie es sich gehört, nicht aus der Tüte, hai capito?'}},
+   {value:'Eintopf', tMood:{lieblich:'Ein Topf, viel Liebe – mach ich dir nicht schwer', eile:'Ein Topf, ein Handgriff, fertig, Amen', streng:'Ein Topf. Mehr braucht kein anständiges Essen, basta.'}},
+   {value:'Grill', tMood:{lieblich:'Alles auf den Grill, wie am Ferragosto, buon appetito', eile:'Grill an, keine Ausreden, Fame!', streng:'Grill. Und diesmal nicht verbrennen, sonst gibt’s Ärger.'}},
+   {value:'Alla Nonna', tMood:{lieblich:'Alla Nonna, genau wie bei Mamma – gute Wahl, tesoro', eile:'Alla Nonna, aber schnell, wie ich’s mag', streng:'Alla Nonna. So, wie es immer war – und so bleibt’s.'}},
+   {value:'Fine Dining', tMood:{lieblich:'Fine Dining? Na dann zeig mal, was du drauf hast', eile:'Fine Dining willst du – dann aber flott, keine Extrawürste', streng:'Fine Dining willst du sein? Dann zeig mir erstmal, dass du kochen kannst.'}}
+ ]},
+ {key:'ausstattung', qMood:{
+   lieblich:'Verrat mir: Wie gut ist deine Küche ausgestattet?',
+   eile:'Wie ausgestattet bist du – kurz und ehrlich?',
+   streng:'Wie steht’s um deine Küche? Ohne Schönreden.'
+ }, opts:[
+   {value:'Nötigste', tMood:{lieblich:'Ein Topf, ein Herz – mehr brauchst du bei mir nicht', eile:'Ein Topf, ein Löffel, fertig – keine Ausreden nötig', streng:'Ein Topf, ein Löffel. Damit wird gearbeitet, keine Widerrede.'}},
+   {value:'Standard', tMood:{lieblich:'Die klassische Küche, wie bei fast jeder Mamma – damit geht schon einiges', eile:'Standardküche, aber die hat’s in sich', streng:'Standardküche. Solide. Mehr brauchst du gar nicht.'}},
+   {value:'Asien/Europa', tMood:{lieblich:'Ein bisschen Europa, ein bisschen Fernost – mutig!', eile:'Bisschen von allem, schnell zusammengesucht', streng:'Europa und Asien, beides. Also keine Ausreden mehr.'}},
+   {value:'Alles', tMood:{lieblich:'Alles da – wie in Mammas Speisekammer, brava', eile:'Alles da, dann aber Tempo', streng:'Alles da. Dann erwarte ich auch was Ordentliches.'}}
+ ]},
+ {key:'zeit', qMood:{
+   lieblich:'Wie viel Zeit bringst du für mich mit?',
+   eile:'Zeit, Zeit – wie viel hast du wirklich?',
+   streng:'Wie viel Zeit hast du mir zu geben?'
+ }, opts:[
+   {value:'ca. 20 Minuten', tMood:{lieblich:'Zack, zack, wir haben doch keine Zeit, tesoro – aber ich schaff’s', eile:'Keine Zeit, wirklich keine, Madonna, beeil dich!', streng:'20 Minuten. Und keine Sekunde mehr, sonst gibt’s nichts.'}},
+   {value:'ca. 30 Minuten', tMood:{lieblich:'Ich muss gleich wieder los, aber für dich nehm ich mir was', eile:'Fünf Minuten hatte ich schon, jetzt reicht’s, andiamo', streng:'Eine halbe Stunde. Mehr nicht, und das reicht auch locker.'}},
+   {value:'ca. 60 Minuten', tMood:{lieblich:'Ne Stunde bring ich mit, ganz in Ruhe – luxuriös, oder?', eile:'Eine Stunde, aber jede Minute zähl ich, also kein Trödeln', streng:'Eine Stunde. Die nehme ich mir – und du hältst dich dran.'}},
+   {value:'kein Zeitlimit', tMood:{lieblich:'Wir haben alle Zeit der Welt, wie am Sonntag – genieß es', eile:'Zeit hab ich, aber frag nicht warum – nutz sie lieber', streng:'Alle Zeit der Welt? Dann zeig ich dir auch, wie’s wirklich geht.'}}
+ ]},
+ {key:'personen', qMood:{
+   lieblich:'Für wie viele Personen kochst du heute?',
+   eile:'Für wie viele – schnell gezählt?',
+   streng:'Für wie viele Personen wird gekocht?'
+ }, opts:[
+   {value:'1 Person', tMood:{lieblich:'Nur für mich, amore', eile:'Nur ich, keine Zeit für andere', streng:'Nur ich – aber wie ein Fest'}},
+   {value:'2 Personen', tMood:{lieblich:'Muss ich wirklich teilen?', eile:'Zu zweit, schnell, schnell', streng:'Zwei. Keiner geht hungrig.'}},
+   {value:'3 Personen', tMood:{lieblich:'Alle guten Dinge sind drei', eile:'Zu dritt, aber fix', streng:'Drei. Alle bekommen genug.'}},
+   {value:'4 Personen', tMood:{lieblich:'Vier auf einen Streich', eile:'Vier Leute, Tisch decken!', streng:'Vier. Ich zähl mit.'}},
+   {value:'5 Personen', tMood:{lieblich:'Für la grande famiglia', eile:'Für la grande famiglia, dalli', streng:'Für la grande famiglia, basta'}}
+ ]}
 ];
 const Q_SHORT = {skill:'Geschick', kueche:'Küche', ausstattung:'Ausstattung', zeit:'Zeit', personen:'Personen'};
+function qText(q){ return (q.qMood && (q.qMood[S.mood]||q.qMood.lieblich)) || q.q || ''; }
+function optText(o){ return (o.tMood && (o.tMood[S.mood]||o.tMood.lieblich)) || o.t || ''; }
 
 const LESSONS = [
  {icon:'🔪', t:'Messer & Schnitttechniken', d:'Julienne, Brunoise – Abschluss: knackiger Gemüsesalat'},
@@ -856,6 +887,36 @@ const MOOD_META = {
   streng: {label:'Streng', icon:'😤'},
   eile: {label:'In Eile', icon:'⏱️'}
 };
+/* Fest hinterlegte Screen-Texte je Gemütszustand (keine KI-Generierung zur Laufzeit). */
+const MOOD_COPY = {
+  cookInput: {
+    lieblich: {hl:'Was hast du denn da, mein Schatz?', sl:'Kühlschrank auf, alles auf den Tisch. Ich mach was draus – versprochen.', hint:'Alle Zutaten, die du eh zuhause hast, kannst du unter Einstellungen eintragen.'},
+    eile: {hl:'Dai, dai – zeig her, was du hast!', sl:'Kühlschrank auf, ich guck kurz drüber. Schnell, schnell, die Pasta wartet nicht.', hint:'Trag ein, was du immer daheim hast – dann müssen wir nicht jedes Mal von vorne anfangen, capito?'},
+    streng: {hl:'Allora. Was hast du mir mitgebracht – und keine Ausreden.', sl:'Kühlschrank auf. Ich seh sowieso, was wirklich drin ist.', hint:'Zutaten, die du immer daheim hast, trägst du unter Einstellungen ein – einmal, basta. Nicht jedes Mal von vorne.'}
+  },
+  loaderConceptsPhrase: {
+    lieblich:'Fünf Ideen köcheln schon …', eile:'Fünf Ideen brutzeln schon, subito subito!', streng:'Fünf Ideen sind in Arbeit. Und jetzt: Geduld.'
+  },
+  loaderSub: {
+    lieblich:'Nonna steht am Herd – das dauert einen Moment.', eile:'Nonna wirbelt am Herd – gleich, gleich!', streng:'Nonna kocht. Wer drängelt, kriegt weniger Sugo.'
+  },
+  concepts: {
+    lieblich:{hl:'Fünf Ideen, frisch für dich ausgedacht', sl:'Tippe ein Konzept an – Nonna schreibt dir dann das volle Rezept.'},
+    eile:{hl:'Fünf Ideen – zack, fertig!', sl:'Tipp drauf, Nonna schreibt dir sofort das ganze Rezept. Los geht’s!'},
+    streng:{hl:'Fünf Vorschläge. Schau genau hin.', sl:'Tippe eines an, dann bekommst du das Rezept. Und dann wird gekocht – nicht nur geschaut, capito?'}
+  },
+  mealIntro: {
+    lieblich:{hl:'Nonnas Wochenplan', sl:'Sag mir, was im Haus ist – ich plane dir Prep-Session und Woche.'},
+    eile:{hl:'Nonnas Blitz-Wochenplan', sl:'Sag schnell, was du daheim hast – ich plan dir Prep und Woche, bevor du „Fame" sagen kannst.'},
+    streng:{hl:'Nonnas Wochenplan', sl:'Sag mir ehrlich, was zuhause ist. Und diesmal auch halten, sonst reden wir nochmal.'}
+  }
+};
+function moodCopy(section, field){
+  const entry = MOOD_COPY[section];
+  if(!entry) return '';
+  const m = (entry[S.mood] !== undefined) ? entry[S.mood] : entry.lieblich;
+  return field ? ((m && m[field]) || '') : (m || '');
+}
 const NONNA_PERSONA = {
   lieblich: 'Tonfall in Begrüßung/Kommentaren/Rahmung: liebevoll, warmherzig, humorvoll – wie eine herzliche italienische Nonna, ermutigend und verspielt.',
   streng: 'Tonfall in Begrüßung/Kommentaren/Rahmung: eine STRENGE Nonna – bestimmt, mit hohen Ansprüchen, duldet keine Abkürzungen oder Schlamperei (z.B. "bei mir wird ordentlich gekocht, keine faulen Tricks"). Bleibt dabei liebevolle Großmutter, KEIN Drill-Sergeant – streng aus Fürsorge, nie grob oder militärisch.',
@@ -1016,7 +1077,7 @@ async function consumeUsage(){ S.usage.push(Date.now()); await sset('nonna:usage
 /* ============ HELPERS ============ */
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function el(id){ return document.getElementById(id); }
-function answersText(a){ return QUESTIONS.map(q=>`${q.q} → ${a[q.key]}`).join('\n'); }
+function answersText(a){ return QUESTIONS.map(q=>`${Q_SHORT[q.key]} → ${a[q.key]}`).join('\n'); }
 function stopLoader(){ if(S.loadTimer){ clearInterval(S.loadTimer); S.loadTimer=null; } }
 
 /* Generisch: jede Zutaten-/Einkaufsliste in der App lässt sich damit herunterladen oder teilen */
@@ -1036,7 +1097,8 @@ async function shareOrDownloadText(title, content, filename){
 function setPhrase(t){ const p=el('phrase'); if(p) p.textContent=t; }
 
 function loaderHTML(kind){
-  const ph = PHRASES[kind]||PHRASES.concepts;
+  let ph = PHRASES[kind]||PHRASES.concepts;
+  if(kind==='concepts'){ ph = [moodCopy('loaderConceptsPhrase'), ...ph.slice(1)]; }
   setTimeout(()=>{
     let i=0; stopLoader();
     S.loadTimer = setInterval(()=>{
@@ -1058,7 +1120,7 @@ function loaderHTML(kind){
     </svg>
     <div>
       <div class="phrase" id="phrase">${esc(ph[0])}</div>
-      <div class="small">Nonna steht am Herd – das dauert einen Moment.</div>
+      <div class="small">${esc(moodCopy('loaderSub'))}</div>
     </div>
   </div>`;
 }
@@ -1134,9 +1196,9 @@ function viewCook(){
 function cookInput(){
   const g=S.gen; const left=usageLeft();
   return `
-  <h1 class="screen" style="font-size:clamp(17px,5.4vw,26px);white-space:nowrap;margin-bottom:var(--s5)">Was hast du denn da, mein Schatz?</h1>
-  <div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">Kühlschrank auf, alles auf den Tisch. Ich mach was draus – versprochen.</div></div>
-  <p class="sub" style="font-size:13.5px;margin-bottom:var(--s3)">Alle Zutaten, die du eh zuhause hast, kannst du unter Einstellungen eintragen.</p>
+  <h1 class="screen" style="font-size:clamp(17px,5.4vw,26px);white-space:nowrap;margin-bottom:var(--s5)">${esc(moodCopy('cookInput','hl'))}</h1>
+  <div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">${esc(moodCopy('cookInput','sl'))}</div></div>
+  <p class="sub" style="font-size:13.5px;margin-bottom:var(--s3)">${esc(moodCopy('cookInput','hint'))}</p>
   <textarea class="field" id="ingInput" rows="2" placeholder="z. B. Hähnchen, Zucchini, Feta …"></textarea>
   <div class="row" style="margin-top:var(--s2)">
     <button class="btn ghost" onclick="addIngredients()">Zutaten hinzufügen</button>
@@ -1238,12 +1300,11 @@ function cookQuestion(){
   <div class="q-wrap">
     <div class="q-progress">${QUESTIONS.map((_,i)=>`<i class="${i<=g.qIndex?'on':''}"></i>`).join('')}</div>
     <div class="q-eyebrow">Frage ${g.qIndex+1} von 5</div>
-    <div class="q-title">${esc(q.q)}</div>
+    <div class="q-title">${esc(qText(q))}</div>
     <div class="opts">
       ${q.opts.map(o=>{
-        const val = o.s ? `${o.t} (${o.s})` : o.t;
-        return `<button class="opt ${cur===val?'sel':''}" onclick="pickAnswer('${q.key}', ${JSON.stringify(val).replace(/"/g,'&quot;')})">
-          <div class="t">${esc(o.t)}</div>${o.s?`<div class="s">${esc(o.s)}</div>`:''}
+        return `<button class="opt ${cur===o.value?'sel':''}" onclick="pickAnswer('${q.key}', ${JSON.stringify(o.value).replace(/"/g,'&quot;')})">
+          <div class="t">${esc(optText(o))}</div><div class="s">${esc(o.value)}</div>
         </button>`;
       }).join('')}
     </div>
@@ -1290,8 +1351,8 @@ function cookConcepts(){
   const g=S.gen; const left=usageLeft();
   return `
   <button class="back" onclick="restartGen()">← Neue Zutaten</button>
-  <h1 class="screen" style="font-size:28px">Fünf Ideen, frisch für dich ausgedacht</h1>
-  <p class="sub">Tippe ein Konzept an – Nonna schreibt dir dann das volle Rezept.</p>
+  <h1 class="screen" style="font-size:28px">${esc(moodCopy('concepts','hl'))}</h1>
+  <p class="sub">${esc(moodCopy('concepts','sl'))}</p>
   ${S.answers?(()=>{ const pc=parsePersonCount(S.answers); return `
   <div class="pstepper">
     <button onclick="setConceptsPersonen(-1)" ${pc<=1?'disabled':''} aria-label="Weniger Personen">–</button>
@@ -1859,8 +1920,8 @@ function mealInputView(){
   const m=S.mp;
   if(!m.startDate){ const d=new Date(); d.setDate(d.getDate()+1); m.startDate=isoDate(d); }
   return `
-  <h1 class="screen">Nonnas Wochenplan</h1>
-  <div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">Sag mir, was im Haus ist – ich plane dir Prep-Session und Woche.</div></div>
+  <h1 class="screen">${esc(moodCopy('mealIntro','hl'))}</h1>
+  <div class="nonna-says"><div class="nonna-face">👵</div><div class="bubble">${esc(moodCopy('mealIntro','sl'))}</div></div>
   <div class="sec-label" style="margin-top:0">Was ist im Haus?</div>
   <textarea class="field" id="mpIng" rows="3" placeholder="z. B. Reis, Linsen, Karotten, Hähnchen, Joghurt …">${esc(m.ingredients)}</textarea>
   <div class="sec-label">Ab welchem Tag?</div>
@@ -2512,12 +2573,11 @@ function profileEditAnswerHTML(){
   const cur = S.answers?.[q.key];
   return `
       <button class="back" style="margin-bottom:var(--s3)" onclick="_profileEditQ=null;refreshProfileSheet()">← Zurück zum Profil</button>
-      <h2 style="font-size:20px">${esc(q.q)}</h2>
+      <h2 style="font-size:20px">${esc(qText(q))}</h2>
       <div class="opts">
         ${q.opts.map(o=>{
-          const val = o.s ? `${o.t} (${o.s})` : o.t;
-          return `<button class="opt ${cur===val?'sel':''}" onclick="pickProfileAnswer('${q.key}', ${JSON.stringify(val).replace(/"/g,'&quot;')})">
-            <div class="t">${esc(o.t)}</div>${o.s?`<div class="s">${esc(o.s)}</div>`:''}
+          return `<button class="opt ${cur===o.value?'sel':''}" onclick="pickProfileAnswer('${q.key}', ${JSON.stringify(o.value).replace(/"/g,'&quot;')})">
+            <div class="t">${esc(optText(o))}</div><div class="s">${esc(o.value)}</div>
           </button>`;
         }).join('')}
       </div>`;
