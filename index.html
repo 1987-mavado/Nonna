@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Nonna – Zutaten rein, Rezept raus.</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 <!-- ============ ANALYTICS (Google Analytics 4) ============
      Measurement-ID G-M61V08K4B4 ist aktiv. Sobald die Seite live auf GitHub Pages/Vercel läuft, sammelt GA
      automatisch Sitzungen, Geräte, Herkunft etc., zusätzlich zu den App-eigenen Events (siehe track() im Skript
@@ -138,6 +144,7 @@ input.field{height:52px}
 .step-timer.running .t-disp{color:var(--warm-dark,#966A22)}
 .step-timer .t-btn{width:30px;height:30px;flex:0 0 30px;border-radius:50%;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;color:var(--blue-700)}
 .stove-ic{font-size:13px}
+.cam-btn{flex:0 0 44px;width:44px;height:44px;border-radius:50%;border:1.5px solid var(--blue-200);background:var(--surface);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;color:var(--blue-700)}
 .voice-dot{width:9px;height:9px;border-radius:50%;background:#E3524A;flex:0 0 9px;animation:voicepulse 1.4s ease-in-out infinite}
 @keyframes voicepulse{0%,100%{opacity:.35;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
 /* Tabbar */
@@ -286,7 +293,7 @@ nav button .lock-mini{font-size:9px;color:var(--warm)}
 /* ============ STATE ============ */
 const S = {
   tab:'cook', pro:false, usage:[], favs:[], history:[], answers:null, mealplan:null, account:null,
-  profile:{allergies:[], allergiesOther:'', age:'', location:'', password:'', diet:'keine',
+  profile:{allergies:[], allergiesOther:'', allergiesCustom:[], age:'', location:'', password:'', diet:'keine',
     kitchenStaples:['Öl','Butter','Zucker','Essig','Zitrone','Wasser','Fond'], spices:['Salz','Pfeffer']},
   school:{completed:[],cache:{}},
   gen:{step:'input', ingredients:[], qIndex:0, draft:{}, concepts:[], detail:null, wish:'', prevTitles:[], retry:null, photoState:'idle', photoErrorMsg:''},
@@ -297,6 +304,7 @@ const S = {
   timers:{},
   tts:{active:false, stepIndex:0},
   visits:0, onboarding:{popup0:false, popup1:false, popup2:false, popup3:false},
+  profilePhoto:{target:null, state:'idle', errorMsg:''},
   mood:'lieblich', voiceExplained:false,
   loadTimer:null, lastErr:null
 };
@@ -850,6 +858,12 @@ async function loadAll(){
   S.mealplan = mealplan||null;
   S.account = account||null;
   if(profile) S.profile = {...S.profile, ...profile};
+  if((!S.profile.allergiesCustom || !S.profile.allergiesCustom.length) && S.profile.allergiesOther && S.profile.allergiesOther.trim()){
+    // Einmalige Migration vom alten Freitextfeld auf die neue Chip-Liste
+    S.profile.allergiesCustom = S.profile.allergiesOther.split(',').map(s=>s.trim()).filter(Boolean);
+    S.profile.allergiesOther = '';
+    await sset('nonna:profile', S.profile);
+  }
   if(school) S.school = school;
   if(schoolLevel) S.sc.level = schoolLevel;
   if(onboarding){
@@ -1521,6 +1535,8 @@ function startReadAloud(){
   const r = getCurrentRecipe();
   if(!r || !(r.schritte||[]).length) return;
   S.tts = {active:true, stepIndex:0};
+  _voicePermissionDenied = false;
+  _voiceDisabledByUser = false;
   renderReadAloud();
   speakCurrentStep();
   startVoiceControl();
@@ -1532,7 +1548,9 @@ function renderReadAloud(){
   const step = steps[i];
   const key = timerKeyFor(i);
   const t = S.timers[key];
-  const voiceOn = speechRecognitionAvailable();
+  const voiceCapable = speechRecognitionAvailable() && !_voiceDisabledByUser && !_voicePermissionDenied;
+  const showExplainer = voiceCapable && step.timer_seconds && !S.voiceExplained;
+  if(showExplainer){ S.voiceExplained = true; sset('nonna:voiceExplained', true); }
   el('modal').innerHTML = `
   <div class="overlay" onclick="if(event.target===this)closeReadAloud()">
     <div class="sheet" style="text-align:center">
@@ -1551,9 +1569,21 @@ function renderReadAloud(){
       <button class="btn" onclick="ttsNextStep()">${i<steps.length-1?'Weiter →':'Fertig'}</button>
       <button class="btn ghost" style="margin-top:var(--s2)" onclick="closeReadAloud()">Schließen</button>
       ${('speechSynthesis' in window)?'':'<p class="usage-note">Dieses Gerät unterstützt keine Sprachausgabe – die Schritte werden nur angezeigt.</p>'}
-      <div id="voiceIndicator" style="display:${voiceOn?'flex':'none'};align-items:center;justify-content:center;gap:6px;margin-top:var(--s3);font-size:12.5px;color:var(--muted)">
-        <span class="voice-dot"></span> Ich höre zu – „Weiter", „Zurück", „Nochmal", „Timer"
+      ${showExplainer?`
+      <div class="card" style="text-align:left;margin-top:var(--s3);font-size:13px;line-height:1.6">
+        <b>Du kannst mich auch per Sprache steuern:</b><br>
+        „Weiter" – nächster Schritt<br>
+        „Zurück" – vorheriger Schritt<br>
+        „Nochmal" – Schritt wiederholen<br>
+        „Timer Start" – Timer starten<br>
+        „Timer Stopp" – Timer stoppen<br>
+        „Sprachsteuerung aus" – Sprachsteuerung ausschalten
+      </div>`:''}
+      <div id="voiceIndicator" style="display:${voiceCapable?'flex':'none'};align-items:center;justify-content:center;gap:6px;margin-top:var(--s3);font-size:12.5px;color:var(--muted)">
+        <span class="voice-dot"></span> Ich höre zu
       </div>
+      ${_voicePermissionDenied?`<p class="usage-note" style="color:var(--bad)">Mikrofon-Zugriff nicht erlaubt – Sprachsteuerung ist aus, Tippen funktioniert weiter.</p>`:''}
+      ${_voiceDisabledByUser?`<button class="chip-btn" style="margin-top:var(--s3)" onclick="reenableVoiceControl()">🎙️ Sprachsteuerung wieder an</button>`:''}
     </div>
   </div>`;
 }
@@ -1583,6 +1613,11 @@ function fmtTimerSpoken(sec){
   if(rest===0) return `${m} Minute${m===1?'':'n'}`;
   return `${m} Minuten ${rest} Sekunden`;
 }
+/* WICHTIG: die Utterance MUSS in einer modul-globalen Variable referenziert bleiben.
+   Chrome sammelt sonst lokal gescopte SpeechSynthesisUtterance-Objekte per GC ein,
+   während sie noch spricht/in der Warteschlange steht – Symptom: kompletter, stiller
+   Blackout ohne jeden Fehler. Das war der Hauptgrund, warum die Vorlesefunktion stumm blieb. */
+let _currentUtterance = null;
 function speakCurrentStep(){
   if(!('speechSynthesis' in window)) return;
   const r = getCurrentRecipe();
@@ -1591,26 +1626,35 @@ function speakCurrentStep(){
   if(!step) return;
   window.speechSynthesis.cancel();
   let text = step.text;
-  const voiceOn = speechRecognitionAvailable();
+  const voiceCapable = speechRecognitionAvailable() && !_voiceDisabledByUser && !_voicePermissionDenied;
   if(step.timer_seconds){
-    text += ` ${fmtTimerSpoken(step.timer_seconds)}${voiceOn?', sag Timer, wenn’s losgehen soll.':'. Timer bei Bedarf manuell starten.'}`;
-    if(voiceOn && !S.voiceExplained){
-      text = `Kurz zur Sprachsteuerung: sag jederzeit Weiter, Zurück, Nochmal oder Timer, ich höre mit. ` + text;
-      S.voiceExplained = true;
-      sset('nonna:voiceExplained', true);
-    }
+    text += ` ${fmtTimerSpoken(step.timer_seconds)}${voiceCapable?', sag Timer Start, wenn’s losgehen soll.':'. Timer bei Bedarf manuell starten.'}`;
   }
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'de-DE';
-  const picked = pickBestGermanVoice();
-  if(picked){ u.voice = picked.voice; u.rate = picked.rate; u.pitch = picked.pitch; }
-  else { u.rate = 0.92; u.pitch = 1.05; } // Fallback ohne jede deutsche Stimme im System
-  window.speechSynthesis.speak(u);
+  const speakNow = ()=>{
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'de-DE';
+    const picked = pickBestGermanVoice();
+    if(picked){ u.voice = picked.voice; u.rate = picked.rate; u.pitch = picked.pitch; }
+    else { u.rate = 0.92; u.pitch = 1.05; } // Fallback ohne jede deutsche Stimme im System
+    u.onerror = (e)=>{ console.warn('speechSynthesis Fehler:', e.error); };
+    _currentUtterance = u; // s. Kommentar oben – Referenz zwingend außerhalb dieser Funktion halten
+    window.speechSynthesis.speak(u);
+  };
+  // getVoices() liefert direkt nach dem Laden oft ein leeres Array (Stimmen werden asynchron
+  // nachgeladen) – dann kurz auf 'voiceschanged' warten statt sofort ohne Stimme zu sprechen.
+  const voicesReady = window.speechSynthesis.getVoices();
+  if(voicesReady && voicesReady.length){ speakNow(); }
+  else {
+    let spoken = false;
+    const onReady = ()=>{ if(spoken) return; spoken=true; window.speechSynthesis.removeEventListener('voiceschanged', onReady); speakNow(); };
+    window.speechSynthesis.addEventListener('voiceschanged', onReady);
+    setTimeout(onReady, 400); // Fallback: nach 400ms trotzdem sprechen, auch ohne Stimmenliste
+  }
 }
 function ttsNextStep(){
   const r = getCurrentRecipe();
   const steps = (r.schritte||[]).map(normalizeStep);
-  if(S.tts.stepIndex >= steps.length-1){ closeReadAloud(); return; }
+  if(S.tts.stepIndex >= steps.length-1){ showReadAloudCelebration(); return; }
   S.tts.stepIndex++;
   renderReadAloud();
   speakCurrentStep();
@@ -1627,21 +1671,64 @@ function closeReadAloud(){
   S.tts = {active:false, stepIndex:0};
   closeModal();
 }
+/* ============ FEIERELEMENT NACH LETZTEM SCHRITT (Abschnitt 4) ============ */
+const BUON_APPETITO_CELEBRATION = {
+  lieblich:'Buon appetito, tesoro! 🤌 Jetzt lass es dir schmecken.',
+  streng:'Buon appetito. 🤌 Und diesmal richtig aufgegessen, ja?',
+  eile:'Buon appetito! 🤌'
+};
+function showReadAloudCelebration(){
+  if('speechSynthesis' in window) window.speechSynthesis.cancel();
+  stopVoiceControl();
+  const line = BUON_APPETITO_CELEBRATION[S.mood] || BUON_APPETITO_CELEBRATION.lieblich;
+  el('modal').innerHTML = `
+  <div class="overlay">
+    <div class="sheet" style="text-align:center">
+      <div style="font-size:44px;margin-bottom:var(--s2)">🎉</div>
+      <p style="font-size:19px;line-height:1.5;font-family:var(--display);font-weight:700">${esc(line)}</p>
+    </div>
+  </div>`;
+  playCelebrationSound();
+  setTimeout(()=>{
+    S.tts = {active:false, stepIndex:0};
+    closeModal();
+  }, 3500);
+}
+function playCelebrationSound(){
+  try{
+    const Ctx = window.AudioContext||window.webkitAudioContext;
+    if(!Ctx) return;
+    const ctx = new Ctx();
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // kleiner aufsteigender Funken-Akkord
+    notes.forEach((freq,idx)=>{
+      setTimeout(()=>{
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type='triangle'; o.frequency.value=freq; g.gain.value=0.14;
+        o.start(); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.35);
+        o.stop(ctx.currentTime+0.35);
+      }, idx*90);
+    });
+    setTimeout(()=>ctx.close(), 900);
+  }catch(e){}
+}
 
-/* ============ SPRACHSTEUERUNG SCHRITTNAVIGATION (Abschnitt 11+5, immer aktiv im Vorlese-Modus) ============
+/* ============ SPRACHSTEUERUNG SCHRITTNAVIGATION (Abschnitt 11+5+2, immer aktiv im Vorlese-Modus) ============
    Nicht mehr an In-Eile gekoppelt – läuft in jedem Gemütszustand, sobald der Vorlese-Modus aktiv ist.
-   Fester Wortsatz statt freiem Diktat: Weiter/Zurück/Nochmal/Timer. Tap-Bedienung im
-   Vorlese-Overlay bleibt immer der Pflicht-Fallback, Sprachsteuerung ist rein additiv. */
+   Fester Wortsatz: Weiter, Zurück, Nochmal, Timer Start, Timer Stopp, Sprachsteuerung aus.
+   Tap-Bedienung im Vorlese-Overlay bleibt immer der Pflicht-Fallback, Sprachsteuerung ist rein additiv. */
 let _recognition = null;
 let _voiceListening = false;
 let _voiceCooldownUntil = 0;
+let _voicePermissionDenied = false;
+let _voiceDisabledByUser = false;
 function speechRecognitionAvailable(){ return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
 function updateVoiceIndicator(){
   const ind = el('voiceIndicator');
   if(ind) ind.style.display = _voiceListening ? 'flex' : 'none';
 }
 function startVoiceControl(){
-  if(!speechRecognitionAvailable() || _recognition) return;
+  if(!speechRecognitionAvailable() || _recognition || _voiceDisabledByUser || _voicePermissionDenied) return;
   const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
   const rec = new Rec();
   rec.lang = 'de-DE';
@@ -1654,14 +1741,21 @@ function startVoiceControl(){
     const transcript = ((last[0]&&last[0].transcript)||'').trim().toLowerCase();
     handleVoiceCommand(transcript);
   };
-  rec.onerror = ()=>{};
+  rec.onerror = (e)=>{
+    console.warn('SpeechRecognition Fehler:', e.error);
+    if(e.error==='not-allowed' || e.error==='service-not-allowed'){
+      _voicePermissionDenied = true;
+      rec.onend = null;
+      renderReadAloud();
+    }
+  };
   rec.onend = ()=>{
     _voiceListening = false; updateVoiceIndicator();
-    if(_recognition===rec && S.tts.active){
+    if(_recognition===rec && S.tts.active && !_voiceDisabledByUser && !_voicePermissionDenied){
       try{ rec.start(); _voiceListening=true; updateVoiceIndicator(); }catch(e){}
     }
   };
-  try{ rec.start(); _recognition=rec; _voiceListening=true; updateVoiceIndicator(); }catch(e){ _recognition=null; }
+  try{ rec.start(); _recognition=rec; _voiceListening=true; updateVoiceIndicator(); }catch(e){ _recognition=null; console.warn('SpeechRecognition start fehlgeschlagen:', e); }
 }
 function stopVoiceControl(){
   _voiceListening = false;
@@ -1672,8 +1766,21 @@ function stopVoiceControl(){
   }
   updateVoiceIndicator();
 }
+function reenableVoiceControl(){
+  _voiceDisabledByUser = false;
+  renderReadAloud();
+  startVoiceControl();
+}
 function handleVoiceCommand(transcript){
   _voiceCooldownUntil = Date.now() + 1500; // Sicherheitsfenster gegen Mehrfachauslösung
+  if(transcript.includes('sprachsteuerung aus')){
+    _voiceDisabledByUser = true;
+    stopVoiceControl();
+    renderReadAloud();
+    return;
+  }
+  if(transcript.includes('timer start')){ startVoiceTimer(); return; }
+  if(transcript.includes('timer stopp') || transcript.includes('timer stop')){ stopVoiceTimer(); return; }
   if(transcript.includes('weiter')) ttsNextStep();
   else if(transcript.includes('zurück') || transcript.includes('zurueck')) ttsPrevStep();
   else if(transcript.includes('nochmal')) speakCurrentStep();
@@ -1687,6 +1794,16 @@ function startVoiceTimer(){
   const key = timerKeyFor(S.tts.stepIndex);
   const t = ensureTimer(key, step.timer_seconds);
   if(!t.running){ t.running = true; startTimerTick(); updateWakeLock(); }
+  renderReadAloud();
+}
+function stopVoiceTimer(){
+  const r = getCurrentRecipe(); if(!r) return;
+  const steps = (r.schritte||[]).map(normalizeStep);
+  const step = steps[S.tts.stepIndex];
+  if(!step || !step.timer_seconds) return; // Schritt ohne Timer-Feld: stillschweigend ignorieren
+  const key = timerKeyFor(S.tts.stepIndex);
+  const t = S.timers[key];
+  if(t && t.running){ t.running = false; updateWakeLock(); }
   renderReadAloud();
 }
 
@@ -2499,7 +2616,13 @@ function profileMainHTML(){
       <div class="chips">
         ${ALLERGY_CATEGORIES.map(a=>`<button class="chip-btn ${S.profile.allergies.includes(a)?'on':''}" onclick="toggleAllergy('${esc(a)}')">${esc(a)}</button>`).join('')}
       </div>
-      <input class="field" style="margin-top:var(--s3)" id="profAllergyOther" type="text" placeholder="Weitere, durch Komma getrennt" value="${esc(S.profile.allergiesOther||'')}" onblur="saveProfileText('allergiesOther', this.value)">
+      <div class="chips" style="margin-top:var(--s2)">
+        ${(S.profile.allergiesCustom||[]).map((z,i)=>`<span class="chip">${esc(z)}<button onclick="removeAllergyCustom(${i})" aria-label="Entfernen">✕</button></span>`).join('')}
+      </div>
+      <div class="row" style="margin-top:var(--s2)">
+        <input class="field" id="allergyCustomInput" type="text" placeholder="Weitere, z. B. Sellerie" onkeydown="if(event.key==='Enter'){event.preventDefault();addAllergyCustomFromInput();}">
+        <button class="btn ghost" style="padding:10px 16px" onclick="addAllergyCustomFromInput()">Hinzufügen</button>
+      </div>
       <p class="usage-note">Nonna übernimmt keine Gewähr für Kreuzkontamination – bei ernsten Allergien bitte zusätzlich selbst prüfen.</p>
 
       <div class="sec-label">Ernährungsweise</div>
@@ -2517,7 +2640,9 @@ function profileMainHTML(){
       <div class="row" style="margin-top:var(--s2)">
         <input class="field" id="staplesInput" type="text" placeholder="z. B. Sojasauce" onkeydown="if(event.key==='Enter'){event.preventDefault();addKitchenStapleFromInput();}">
         <button class="btn ghost" style="padding:10px 16px" onclick="addKitchenStapleFromInput()">Hinzufügen</button>
+        <button class="cam-btn" onclick="triggerProfilePhoto('staples')" aria-label="Per Foto hinzufügen" title="Per Foto hinzufügen">📷</button>
       </div>
+      ${S.profilePhoto.target==='staples'?profilePhotoStatusHTML():''}
 
       <div class="sec-label" style="margin-top:var(--s5)">Gewürze</div>
       <p class="sub" style="margin-bottom:var(--s2)">Genauso: diese Gewürze setzt Nonna immer voraus.</p>
@@ -2527,7 +2652,10 @@ function profileMainHTML(){
       <div class="row" style="margin-top:var(--s2)">
         <input class="field" id="spicesInput" type="text" placeholder="z. B. Paprikapulver" onkeydown="if(event.key==='Enter'){event.preventDefault();addSpiceFromInput();}">
         <button class="btn ghost" style="padding:10px 16px" onclick="addSpiceFromInput()">Hinzufügen</button>
+        <button class="cam-btn" onclick="triggerProfilePhoto('spices')" aria-label="Per Foto hinzufügen" title="Per Foto hinzufügen">📷</button>
       </div>
+      ${S.profilePhoto.target==='spices'?profilePhotoStatusHTML():''}
+      <input type="file" id="profPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="handleProfilePhoto(this)">
 
       <div class="sec-label" style="margin-top:var(--s5)">Weitere Angaben</div>
       <input class="field" id="profAge" type="number" min="1" max="120" placeholder="Alter" value="${esc(S.profile.age||'')}" onblur="saveProfileText('age', this.value)">
@@ -2561,6 +2689,56 @@ async function addSpice(v){
 }
 function addSpiceFromInput(){ const i=el('spicesInput'); if(!i) return; addSpice(i.value); }
 async function removeSpice(i){ S.profile.spices.splice(i,1); await sset('nonna:profile', S.profile); refreshProfileSheet(); }
+async function addAllergyCustom(v){
+  const parts = (v||'').split(/[,\n;]+/).map(s=>s.trim()).filter(Boolean);
+  for(const p of parts){ if(!S.profile.allergiesCustom.some(x=>x.toLowerCase()===p.toLowerCase())) S.profile.allergiesCustom.push(p); }
+  await sset('nonna:profile', S.profile);
+  refreshProfileSheet();
+}
+function addAllergyCustomFromInput(){ const i=el('allergyCustomInput'); if(!i) return; addAllergyCustom(i.value); }
+async function removeAllergyCustom(i){ S.profile.allergiesCustom.splice(i,1); await sset('nonna:profile', S.profile); refreshProfileSheet(); }
+/* ============ FOTO-ERKENNUNG FÜR KÜCHENSCHRANK/GEWÜRZE (nutzt dieselbe Vision-Erkennung wie das Kühlschrank-Foto) ============ */
+function profilePhotoStatusHTML(){
+  const p = S.profilePhoto;
+  if(p.state==='loading') return `<p class="usage-note">Nonna schaut sich das Foto an …</p>`;
+  if(p.state==='error') return `<p class="usage-note" style="color:var(--bad)">${esc(p.errorMsg||'Foto konnte nicht ausgewertet werden.')}</p>`;
+  return '';
+}
+function triggerProfilePhoto(target){
+  if(!S.pro){ openPaywall(); return; }
+  S.profilePhoto = {target, state:'idle', errorMsg:''};
+  const inp = el('profPhotoInput'); if(inp) inp.click();
+}
+async function handleProfilePhoto(inputEl){
+  const target = S.profilePhoto.target;
+  const file = inputEl.files && inputEl.files[0];
+  inputEl.value = '';
+  if(!file || !target) return;
+  if(!file.type.startsWith('image/')){ S.profilePhoto = {target, state:'error', errorMsg:'Das scheint kein Bild zu sein.'}; refreshProfileSheet(); return; }
+  if(file.size > 10*1024*1024){ S.profilePhoto = {target, state:'error', errorMsg:'Foto ist zu groß (max. 10 MB).'}; refreshProfileSheet(); return; }
+  S.profilePhoto = {target, state:'loading', errorMsg:''}; refreshProfileSheet();
+  try{
+    const base64 = await fileToBase64(file);
+    const label = target==='staples' ? 'Grundzutaten (z. B. Öl, Essig, Wasser, Fond, Konserven)' : 'Gewürze/Kräuter';
+    const data = await askClaude(
+      `Analysiere dieses Foto und liste alle klar erkennbaren ${label} auf.\nJSON-Schema (exakt, Deutsch, sonst nichts): {"zutaten":["Öl","Essig"]}`,
+      SYSTEM_VISION, 500, { media_type:file.type, data:base64 }
+    );
+    const found = Array.isArray(data.zutaten) ? data.zutaten.filter(x=>typeof x==='string' && x.trim()) : [];
+    if(!found.length){
+      S.profilePhoto = {target, state:'error', errorMsg:'Nonna konnte auf dem Foto nichts eindeutig erkennen. Versuch ein helleres, näheres Bild oder trag es von Hand ein.'};
+      refreshProfileSheet(); return;
+    }
+    if(target==='staples') await addKitchenStaple(found.join(', '));
+    else await addSpice(found.join(', '));
+    S.profilePhoto = {target:null, state:'idle', errorMsg:''};
+    track('profile_ingredients_detected_from_photo', {target, count:found.length});
+    refreshProfileSheet();
+  }catch(e){
+    S.profilePhoto = {target, state:'error', errorMsg:e.message || 'Foto konnte nicht ausgewertet werden.'};
+    refreshProfileSheet();
+  }
+}
 async function saveProfileText(key,val){
   /* Hinweis: 'password' ist ein reines Freitextfeld ohne Hashing/Session – rein lokale
      Simulation des Account-Konzepts, KEIN echter Auth-Mechanismus. */
@@ -2591,10 +2769,7 @@ async function pickProfileAnswer(key,val){
 /* Fasst Allergien/Diät als harte Ausschlussregeln für den System-Prompt zusammen –
    wird in generateConcepts/openDetail/generateMealplan/openMealDetail angehängt. */
 function dietaryConstraintsText(){
-  const allergyList = [...(S.profile.allergies||[])];
-  if(S.profile.allergiesOther && S.profile.allergiesOther.trim()){
-    allergyList.push(...S.profile.allergiesOther.split(',').map(s=>s.trim()).filter(Boolean));
-  }
+  const allergyList = [...(S.profile.allergies||[]), ...(S.profile.allergiesCustom||[])];
   const parts=[];
   if(allergyList.length) parts.push(`ALLERGIEN/UNVERTRÄGLICHKEITEN – verwende unter keinen Umständen: ${allergyList.join(', ')}. Das ist eine harte Sicherheitsregel, keine Geschmackspräferenz.`);
   if(S.profile.diet==='vegan') parts.push('Diät: STRIKT VEGAN – keine tierischen Produkte (kein Fleisch, Fisch, Ei, Milchprodukte, Honig).');
