@@ -134,10 +134,10 @@ input.field{height:52px}
 .tag{font-size:12px;font-weight:600;background:var(--blue-050);color:var(--blue-700);padding:5px 10px;border-radius:999px}
 .tag.w{background:var(--warm-soft);color:#966A22}
 /* Rezept */
-.r-head{display:flex;align-items:center;gap:12px;margin:var(--s4) 0 var(--s2);white-space:nowrap}
+.r-head{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin:var(--s4) 0 var(--s2)}
 .r-head .nonna-back-button{margin:0}
-.r-head .recipe-points-preview{flex-shrink:0;font-weight:700;font-size:15px;color:var(--blue-700)}
-.r-head h1{flex:1 1 auto;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r-head .recipe-points-preview{display:block;font-weight:700;font-size:15px;color:var(--blue-700)}
+.r-head h1{margin:0;white-space:normal;overflow:visible;text-overflow:unset;word-wrap:break-word}
 .heart{border:1.5px solid var(--line);background:var(--surface);width:46px;height:46px;flex:0 0 46px;border-radius:14px;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;color:var(--blue-300)}
 .heart.on{color:var(--bad);border-color:#EED4CB;background:#FBF1ED}
 .header-actions{grid-column:3;display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
