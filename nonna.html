@@ -135,9 +135,10 @@ input.field{height:52px}
 .tag.w{background:var(--warm-soft);color:#966A22}
 /* Rezept */
 .r-head{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin:var(--s4) 0 var(--s2)}
-.r-head .nonna-back-button{margin:0}
-.r-head .recipe-points-preview{display:block;font-weight:700;font-size:15px;color:var(--blue-700)}
-.r-head h1{margin:0;white-space:normal;overflow:visible;text-overflow:unset;word-wrap:break-word}
+.r-head-row{display:flex;flex-direction:row;align-items:center;justify-content:space-between;width:100%}
+.r-head-row .nonna-back-button{margin:0}
+.r-head-row .recipe-points-preview{font-weight:700;font-size:15px;color:var(--blue-700)}
+.r-head h1{margin:0;width:100%;white-space:normal;overflow:visible;text-overflow:unset;word-wrap:break-word}
 .heart{border:1.5px solid var(--line);background:var(--surface);width:46px;height:46px;flex:0 0 46px;border-radius:14px;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;color:var(--blue-300)}
 .heart.on{color:var(--bad);border-color:#EED4CB;background:#FBF1ED}
 .header-actions{grid-column:3;display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
@@ -2025,8 +2026,10 @@ function recipeHTML(r, backFn){
   const collapse = ensureCollapseState(r);
   return `
   <div class="r-head">
-    ${renderBackButton(backFn)}
-    ${typeof r.cachedPoints==='number'?`<span class="recipe-points-preview">🔥 ${r.cachedPoints}</span>`:''}
+    <div class="r-head-row">
+      ${renderBackButton(backFn)}
+      ${typeof r.cachedPoints==='number'?`<span class="recipe-points-preview">🔥 ${r.cachedPoints}</span>`:''}
+    </div>
     <h1 class="screen" style="font-size:27px">${esc(r.titel)}</h1>
   </div>
   <p class="sub" style="margin-bottom:var(--s4)">${esc(r.konzept||'')}</p>
