@@ -281,7 +281,7 @@ nav button .lock-mini{font-size:9px;color:var(--warm)}
 <div id="frame">
   <header>
     <div class="header-left">
-      <button class="chip-btn" id="pointsBadge" onclick="openProfile()" aria-label="Punktestand">⭐ 0</button>
+      <button class="chip-btn" id="pointsBadge" onclick="openProfile()" aria-label="Punktestand">🔥 0</button>
       <button class="chip-btn" id="moodBadge" onclick="openMoodPicker()" aria-label="Nonnas Gemütszustand">…</button>
     </div>
     <img class="header-logo" src="nonna-header-logo@1x.png" srcset="nonna-header-logo@1x.png 1x, nonna-header-logo@2x.png 2x" alt="Nonna">
@@ -1322,7 +1322,7 @@ function render(){
   el('proBadge').textContent = (S.pro ? 'Famiglia' : 'Amico') + ' ⚙️';
   el('proBadge').className = 'chip-btn'+(S.pro?' pro-on':'');
   el('moodBadge').textContent = MOOD_META[S.mood].icon + ' ' + MOOD_META[S.mood].label;
-  el('pointsBadge').textContent = '⭐ ' + S.progress.totalPoints.toLocaleString('de-DE');
+  el('pointsBadge').textContent = '🔥 ' + S.progress.totalPoints.toLocaleString('de-DE');
   renderTabbar();
   renderHeaderHeart();
   const app = el('app');
@@ -1554,7 +1554,7 @@ function cookConcepts(){
       <h3>${esc(k.titel)}</h3>
       <p>${esc(k.konzept)}</p>
       <div class="taste">${esc(k.geschmacksprofil)}</div>
-      <div class="meta">${typeof k.cachedPoints==='number'?`<span class="tag w">⭐ ${k.cachedPoints}</span>`:''}<span class="tag">⏱ ${esc(k.dauer)}</span><span class="tag w">${esc(k.schwierigkeit)}</span>${k.ausreisser?`<span class="tag w">✨ Anders als sonst</span>`:''}</div>
+      <div class="meta">${typeof k.cachedPoints==='number'?`<span class="tag w">🔥 ${k.cachedPoints}</span>`:''}<span class="tag">⏱ ${esc(k.dauer)}</span><span class="tag w">${esc(k.schwierigkeit)}</span>${k.ausreisser?`<span class="tag w">✨ Anders als sonst</span>`:''}</div>
       ${k.ersetzt?`<p class="usage-note" style="text-align:left;margin-top:var(--s2);color:var(--warm-dark,#966A22)">🔄 ${esc(k.ersetzt)}</p>`:''}
     </div>`).join('')}
   </div>
@@ -2018,7 +2018,7 @@ function recipeHTML(r, backFn){
   <button class="back" onclick="${backFn}">← Zurück</button>
   <div class="r-head">
     <h1 class="screen" style="font-size:27px">${esc(r.titel)}</h1>
-    ${typeof r.cachedPoints==='number'?`<p class="usage-note" style="text-align:left;margin:4px 0 0;color:var(--blue-700);font-weight:600">⭐ ${r.cachedPoints} Punkte bei Zubereitung</p>`:''}
+    ${typeof r.cachedPoints==='number'?`<p class="usage-note" style="text-align:left;margin:4px 0 0;color:var(--blue-700);font-weight:600">🔥 ${r.cachedPoints} Punkte bei Zubereitung</p>`:''}
   </div>
   <p class="sub" style="margin-bottom:var(--s4)">${esc(r.konzept||'')}</p>
   <div class="star-rating" role="group" aria-label="Rezept bewerten">
@@ -2804,7 +2804,7 @@ function progressSectionHTML(){
           <span class="usage-note" style="margin:0">${S.progress.totalPoints} Punkte</span>
         </div>
         ${nextTier?`<p class="usage-note" style="text-align:left;margin:0 0 var(--s2)">Noch ${nextTier.minPoints - S.progress.totalPoints} Punkte bis „${esc(nextTier.label)}“</p>`:`<p class="usage-note" style="text-align:left;margin:0 0 var(--s2)">Höchste Stufe erreicht – complimenti!</p>`}
-        ${streak>=2?`<p class="usage-note" style="text-align:left;margin:0 0 var(--s2)">🔥 ${streak} Tage in Folge gekocht</p>`:''}
+        ${streak>=2?`<p class="usage-note" style="text-align:left;margin:0 0 var(--s2)">📅 ${streak} Tage in Folge gekocht</p>`:''}
         ${techEntries.length?`<div class="chips">${techEntries.map(([id,n])=>{const t=TECHNIQUE_TAXONOMY.find(x=>x.id===id); return `<span class="tag">${esc(t?t.label:id)} ×${n}</span>`;}).join('')}</div>`:`<p class="usage-note" style="text-align:left;margin:0">Koch dein erstes Rezept, um Fortschritt zu sammeln.</p>`}
       </div>
       <button class="btn ghost" style="margin-bottom:var(--s3)" onclick="openSecretRecipes()">🔒 Geheimrezepte${tier.id==='cuoco_di_famiglia'?'':' (ab „Cuoco di famiglia“)'}</button>`;
