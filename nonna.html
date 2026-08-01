@@ -76,7 +76,7 @@ h1.screen{font-family:var(--display);font-weight:800;font-size:34px;line-height:
 .sec-label.collapsible{display:flex;align-items:center;justify-content:space-between;cursor:pointer}
 .collapse-hint{font-size:11px;font-weight:600;text-transform:none;letter-spacing:normal;color:var(--muted)}
 .buon-appetito{text-align:center;font-family:var(--display);font-weight:700;font-size:15px;color:var(--blue-700);margin-top:var(--s5)}
-.back{border:0;background:none;cursor:pointer;font-family:var(--body);font-weight:600;font-size:14px;color:var(--blue-700);padding:0;margin:var(--s4) 0 0;display:inline-flex;align-items:center;gap:6px;height:28px}
+.nonna-back-button{width:36px;height:36px;border-radius:50%;border:0;background:var(--blue-100);color:var(--blue-700);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;padding:0;margin:var(--s4) 0 0}
 .nonna-says{display:flex;gap:10px;align-items:flex-start;margin:0 0 var(--s5)}
 .nonna-says .bubble{background:var(--surface);border:1px solid var(--line);border-radius:4px 16px 16px 16px;padding:10px 14px;font-size:14px;line-height:1.45}
 .nonna-face{flex:0 0 34px;width:34px;height:34px;border-radius:50%;background:var(--blue-100);display:flex;align-items:center;justify-content:center;font-size:17px}
@@ -134,8 +134,10 @@ input.field{height:52px}
 .tag{font-size:12px;font-weight:600;background:var(--blue-050);color:var(--blue-700);padding:5px 10px;border-radius:999px}
 .tag.w{background:var(--warm-soft);color:#966A22}
 /* Rezept */
-.r-head{display:flex;justify-content:space-between;align-items:flex-end;gap:var(--s5)}
-.r-head h1{flex:1 1 auto;min-width:0}
+.r-head{display:flex;align-items:center;gap:12px;margin:var(--s4) 0 var(--s2);white-space:nowrap}
+.r-head .nonna-back-button{margin:0}
+.r-head .recipe-points-preview{flex-shrink:0;font-weight:700;font-size:15px;color:var(--blue-700)}
+.r-head h1{flex:1 1 auto;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .heart{border:1.5px solid var(--line);background:var(--surface);width:46px;height:46px;flex:0 0 46px;border-radius:14px;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;color:var(--blue-300)}
 .heart.on{color:var(--bad);border-color:#EED4CB;background:#FBF1ED}
 .header-actions{grid-column:3;display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
@@ -1258,6 +1260,13 @@ async function consumeUsage(){ S.usage.push(Date.now()); await sset('nonna:usage
 /* ============ HELPERS ============ */
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function el(id){ return document.getElementById(id); }
+function renderBackButton(onclickExpr, ariaLabel){
+  return `<button class="nonna-back-button" aria-label="${esc(ariaLabel||'Zurück')}" onclick="${onclickExpr}">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+      <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>`;
+}
 function answersText(a){ return QUESTIONS.map(q=>`${Q_SHORT[q.key]} → ${a[q.key]}`).join('\n'); }
 function stopLoader(){ if(S.loadTimer){ clearInterval(S.loadTimer); S.loadTimer=null; } }
 
@@ -1490,7 +1499,7 @@ function cookQuestion(){
         </button>`;
       }).join('')}
     </div>
-    ${g.qIndex>0?`<div style="margin-top:var(--s4)"><button class="back" style="margin-top:0" onclick="prevQuestion()">← Zurück</button></div>`:''}
+    ${g.qIndex>0?renderBackButton('prevQuestion()'):''}
   </div>`;
 }
 function pickAnswer(key,val){
@@ -1538,7 +1547,7 @@ ${gamificationConceptSchemaPrompt()}
 function cookConcepts(){
   const g=S.gen; const left=usageLeft();
   return `
-  <button class="back" onclick="restartGen()">← Neue Zutaten</button>
+  ${renderBackButton('restartGen()', 'Neue Zutaten')}
   <h1 class="screen" style="font-size:28px">${esc(moodCopy('concepts','hl'))}</h1>
   <p class="sub">${esc(moodCopy('concepts','sl'))}</p>
   ${S.answers?(()=>{ const pc=parsePersonCount(S.answers); return `
@@ -2015,10 +2024,10 @@ function recipeHTML(r, backFn){
   const zList = r.basisPersonen ? scaleZutaten(r.zutaten, r.basisPersonen, personen) : (r.zutaten||[]);
   const collapse = ensureCollapseState(r);
   return `
-  <button class="back" onclick="${backFn}">← Zurück</button>
   <div class="r-head">
+    ${renderBackButton(backFn)}
+    ${typeof r.cachedPoints==='number'?`<span class="recipe-points-preview">🔥 ${r.cachedPoints}</span>`:''}
     <h1 class="screen" style="font-size:27px">${esc(r.titel)}</h1>
-    ${typeof r.cachedPoints==='number'?`<p class="usage-note" style="text-align:left;margin:4px 0 0;color:var(--blue-700);font-weight:600">🔥 ${r.cachedPoints} Punkte bei Zubereitung</p>`:''}
   </div>
   <p class="sub" style="margin-bottom:var(--s4)">${esc(r.konzept||'')}</p>
   <div class="star-rating" role="group" aria-label="Rezept bewerten">
@@ -2555,7 +2564,7 @@ async function setSchoolLevel(lvl){
 function lessonView(){
   const sc=S.sc; const l=sc.lesson; const meta=LESSONS[sc.lessonIdx];
   if(sc.phase==='intro') return `
-    <button class="back" onclick="closeLesson()">← Lernpfad</button>
+    ${renderBackButton('closeLesson()', 'Lernpfad')}
     <div class="q-eyebrow" style="margin-top:var(--s4)">Lektion ${sc.lessonIdx+1} · ${sc.level==='anfaenger'?'Anfänger':sc.level==='profi'?'Profi':'Mittelmaß'}</div>
     <h1 class="screen" style="font-size:28px;margin-top:0">${meta.icon} ${esc(meta.t)}</h1>
     <p class="sub">${esc(l.intro)}</p>
@@ -2565,7 +2574,7 @@ function lessonView(){
   if(sc.phase==='quiz'){
     const q=l.quiz[sc.quizIdx];
     return `
-    <button class="back" onclick="closeLesson()">← Lernpfad</button>
+    ${renderBackButton('closeLesson()', 'Lernpfad')}
     <div class="q-wrap" style="min-height:auto;margin-top:var(--s4)">
       <div class="q-eyebrow">Frage ${sc.quizIdx+1} von ${l.quiz.length}</div>
       <div class="q-title" style="font-size:24px">${esc(q.frage)}</div>
@@ -2587,7 +2596,7 @@ function lessonView(){
   if(sc.phase==='recipe'){
     const r=l.praxisrezept;
     return `
-    <button class="back" onclick="closeLesson()">← Lernpfad</button>
+    ${renderBackButton('closeLesson()', 'Lernpfad')}
     <div class="q-eyebrow" style="margin-top:var(--s4)">Praxis · ${sc.correct}/${l.quiz.length} im Quiz</div>
     ${recipeCore(r)}
     <button class="btn warm" onclick="completeLesson()">Lektion abschließen ✓</button>
@@ -3025,7 +3034,7 @@ function profileEditAnswerHTML(){
   const q = QUESTIONS[_profileEditQ];
   const cur = S.answers?.[q.key];
   return `
-      <button class="back" style="margin-bottom:var(--s3)" onclick="_profileEditQ=null;refreshProfileSheet()">← Zurück zum Profil</button>
+      <div style="margin-bottom:var(--s3)">${renderBackButton('_profileEditQ=null;refreshProfileSheet()', 'Zurück zum Profil')}</div>
       <h2 style="font-size:20px">${esc(qText(q))}</h2>
       <div class="opts">
         ${q.opts.map(o=>{
