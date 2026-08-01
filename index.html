@@ -3135,7 +3135,7 @@ async function handleDishPhoto(inputEl){
     const celebrationLine = (r && r.transformation_moment && r.celebration_text)
       ? r.celebration_text
       : `Ich hab ${esc((r && (r.dish_name||r.titel))||'etwas Gutes')} gekocht – buon appetito!`;
-    const blob = await createShareImage(file, 'nonna-header-logo@2x.png', celebrationLine);
+    const blob = await createShareImage(file, 'nonna-mark.svg', celebrationLine);
     if(S.shareFlow.previewUrl) URL.revokeObjectURL(S.shareFlow.previewUrl);
     S.shareFlow.blob = blob;
     S.shareFlow.previewUrl = URL.createObjectURL(blob);
@@ -3178,9 +3178,11 @@ async function createShareImage(userPhotoFile, logoUrl, celebrationText){
   ctx.drawImage(userImg, 0, 0);
   try{
     const logoImg = await loadImage(logoUrl);
-    const logoWidth = canvas.width * 0.28;
+    const logoWidth = Math.min(canvas.width * 0.18, 160);
     const logoHeight = logoWidth * (logoImg.height / logoImg.width);
-    ctx.drawImage(logoImg, canvas.width - logoWidth - 24, canvas.height - logoHeight - 24, logoWidth, logoHeight);
+    const topMargin = Math.max(24, Math.min(canvas.height * 0.05, 60));
+    const logoX = (canvas.width - logoWidth) / 2;
+    ctx.drawImage(logoImg, logoX, topMargin, logoWidth, logoHeight);
   }catch(e){ /* Logo optional - Foto funktioniert auch ohne */ }
   if(celebrationText){
     const fontSize = Math.max(18, Math.round(canvas.width*0.032));
